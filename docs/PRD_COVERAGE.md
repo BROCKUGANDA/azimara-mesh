@@ -142,3 +142,46 @@ uses equivalent names (see `docs/architecture/AGENT_PROTOCOL.md`,
 10. Legal review of `LICENSE` and commercial terms.
 
 None of these are hidden: each is tracked above and in the phase plan.
+
+## Workstream 1 update (2026-11-20)
+
+The commercial-readiness design is at
+`docs/superpowers/specs/2026-11-20-azimara-mesh-commercial-readiness-design.md`.
+Workstream 1 (PostgreSQL data foundation and tenant isolation) is implemented
+as code and migrations but is **not yet cut over in production**:
+
+- Prisma datasource is PostgreSQL with a separate migration URL.
+- Baseline and RLS migrations exist under `prisma/migrations/`.
+- Application queries run with transaction-local `set_config` claims; SQLite
+  mode remains a no-op so the live deployment is unaffected.
+- Tenant data tables are RLS-protected; identity/bootstrap tables remain under
+  application authorization guards.
+- CI provisions disposable PostgreSQL, applies migrations and runs 5 RLS
+  integration tests with a non-owner role; all 5 pass against the VPS.
+- A SQLite-to-PostgreSQL migration utility and Postgres-aware deploy guard exist
+  but require rehearsal and explicit approval before live cutover.
+
+Remaining Workstream 1 gates: production data migration dry run, backup/restore
+verification, and actual service cutover.
+
+## Workstream 1 update (2026-11-20)
+
+The commercial-readiness design is at
+`docs/superpowers/specs/2026-11-20-azimara-mesh-commercial-readiness-design.md`.
+Workstream 1 (PostgreSQL data foundation and tenant isolation) has been
+implemented as code and migrations but is **not yet cut over in production**:
+
+- Prisma datasource is PostgreSQL with separate migration URL.
+- Baseline and RLS migrations exist under `prisma/migrations/`.
+- Application queries run with transaction-local `set_config` claims; SQLite
+  mode remains a no-op so the live deployment is unaffected.
+- Tenant data tables are RLS-protected; identity/bootstrap tables remain
+  guarded by the application authorization layer.
+- CI provisions disposable PostgreSQL, applies migrations, and runs 5 RLS
+  integration tests with a non-owner role. All 5 pass.
+- A SQLite-to-PostgreSQL migration utility and Postgres-aware deploy guard
+  exist but require a rehearsal and explicit approval before live cutover.
+
+Release-blocking gaps from this workstream: production data migration dry run,
+backup/restore verification, and actual service cutover.
+
