@@ -44,11 +44,11 @@ jobs:
             -e POSTGRES_PASSWORD=ci_bootstrap_password \
             -p 127.0.0.1:55432:5432 \
             postgres:16-alpine
-          for i in $(seq 1 30); do
-            docker exec mesh-ci-postgres pg_isready -U mesh_bootstrap -d mesh >/dev/null 2>&1 && break
+          for i in $(seq 1 45); do
+            docker exec mesh-ci-postgres pg_isready -h 127.0.0.1 -p 5432 -U mesh_bootstrap -d mesh >/dev/null 2>&1 && break
             sleep 1
           done
-          docker exec mesh-ci-postgres pg_isready -U mesh_bootstrap -d mesh
+          docker exec mesh-ci-postgres pg_isready -h 127.0.0.1 -p 5432 -U mesh_bootstrap -d mesh
 
       - name: Bootstrap database roles
         env:

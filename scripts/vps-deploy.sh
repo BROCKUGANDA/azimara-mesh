@@ -33,20 +33,23 @@ if [ -n "${MESH_ENV:-}" ]; then
   printf '%s\n' "$MESH_ENV" > "$TARGET_DIR/.env"
 fi
 
-# Materialize the database and schema only after the artifact is in place.
-# Pin the CLI major: `bunx prisma` on a bare runner resolves to the latest
-# major (8.x), which removed `db push`. Keep this in step with package.json.
-# Keep this in step with the `prisma` version in package.json. A literal is
-# intentional: the standalone package.json does not carry devDependencies, so
-# runtime introspection is unreliable on the runner.
+# Materialize the database schema only after the artifact is in place.
+# Pin the CLI major: `bunx` on a bare runner resolves to a newer major whose
+# commands differ; `bun x` is available, and a literal version is intentional
+# because the standalone package.json does not carry devDependencies.
 PRISMA_VERSION="6.19.2"
 # The standalone artifact does not ship the Prisma schema; stage it from the
-# checked-out workspace so `db push` has a contract to apply.
+# checked-out workspace so the CLI has a contract to apply.
 mkdir -p "$TARGET_DIR/prisma"
-cp prisma/schema.prisma "$TARGET_DIR/prisma/schema.prisma"
+cp -r prisma/schema.prisma prisma/migrations "$TARGET_DIR/prisma/" 2>/dev/null || cp prisma/schema.prisma "$TARGET_DIR/prisma/schema.prisma"
 cd "$TARGET_DIR"
-if [ -n "$PRISMA_VERSION" ]; then
-  # `bunx` is not on PATH in a non-login runner shell; `bun x` is.
+
+DB_URL_FROM_ENV="$(grep -E '^DATABASE_URL=' .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' || true)"
+if echo "$DB_URL_FROM_ENV" | grep -qiE '^postgres(ql)?://'; then
+  echo "PostgreSQL detected: applying forward-only migrations"
+  bun x "prisma@${PRISMA_VERSION}" migrate deploy || { echo "migration failed; refusing to promote" >&2; exit 1; }
+else
+  echo "::warning::SQLite fallback is deprecated; PostgreSQL cutover required for commercial use"
   bun x "prisma@${PRISMA_VERSION}" db push --skip-generate || echo "::warning::prisma db push failed; inspect before promoting"
 fi
 
