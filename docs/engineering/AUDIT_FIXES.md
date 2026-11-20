@@ -165,3 +165,25 @@ Files: `.gitignore`, `scripts/secret-scan.mjs`, `.github/workflows/*.yml`.
 - **No server-side API-key authentication path yet.** API keys are minted and
   revocable but the request path still uses session cookies.
 - **SSO/SCIM, ABAC, dedicated services** remain roadmap items.
+
+## P0 — dependency hardening (verified 2026-11-20)
+
+GitHub Dependabot and `bun audit` initially reported critical advisories in
+Next.js (unauthenticated RCE in image optimisation and `use cache`) and
+Auth.js (homoglyph `@` bypass). Fixed by upgrading:
+
+- `next` 16.1.x → 16.4.6
+- `next-auth` 4.24.13 → 4.24.15
+- `zod` 4.3.5 → 4.6.7
+- `sharp` 0.34.x → 0.35.5 (libvips/libheif/librsvg)
+- `bun audit fix` within declared ranges (47 further transitive fixes)
+
+Result: **0 critical advisories**. 12 lower-severity advisories remain in
+development-time transitive packages (Prisma config, ESLint, MDX editor);
+these are reported non-blocking by `security.yml` and tracked for the next
+dependency refresh. The security workflow now audits the real `bun.lock`
+tree instead of a synthetic npm lockfile.
+
+Typecheck, unit tests and production build were re-run after the upgrades and
+all pass.
+

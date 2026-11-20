@@ -54,3 +54,31 @@ approval gates proven · audit evidence complete · runbook for deploy/verify.
 | 18 | Meter & bill accurately | ✅ metering+invoices; charging roadmap |
 | 19 | Recover from tested infrastructure failures | 🗺️ needs durable backends |
 | 20 | Support real customer deployments | 🗺️ pilot stage |
+
+## Deployment facts (verified 2026-11-20)
+
+- Public repository: `github.com/BROCKUGANDA/azimara-mesh` (public, single
+  squashed commit with no secrets, databases or session keys in history).
+- Application URL: `https://mesh.aiazimara.com` (Cloudflare A record to
+  57.130.80.158, SNI-routed through the VPS edge nginx to Caddy to the app).
+- App runtime: systemd unit `azimara-mesh`, user `ubuntu`, port 3031
+  (port 3011 is occupied by another project on the same VPS).
+- Data: SQLite at `/home/ubuntu/azimara-mesh-app/db/mesh.db`. `.env` and `db/`
+  are excluded from `rsync --delete` by `scripts/vps-deploy.sh`.
+- Runner: dedicated GitHub Actions runner `azimara-mesh-vps-1`, labels
+  `self-hosted`, `Linux`, `X64`, `azimara-mesh`.
+- Workflows: ci.yml (typecheck, lint, unit tests, secret scan, build),
+  security.yml (secret scan, blocking `bun audit --audit-level=critical`),
+  deploy.yml (manual workflow_dispatch only).
+- Verified 2026-11-20: CI success, Deploy success, Security blocking audit
+  success after upgrading Next.js to 16.4.6, next-auth to 4.24.15 and running
+  `bun audit fix`. 12 lower-severity dev-tooling advisories remain and are
+  reported non-blocking.
+
+## Outstanding production gates
+
+Tenant-isolation integration suite, worker-crash recovery demonstration,
+budget reservation, durable queue/outbox, sandbox isolation, API-key auth
+path, live billing provider, WCAG 2.2 AA audit, independent penetration test,
+backup/restore exercise, and legal review of the repository licence.
+
