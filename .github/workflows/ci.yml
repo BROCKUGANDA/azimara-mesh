@@ -18,9 +18,12 @@ jobs:
   verify:
     name: Verify (self-hosted VPS)
     runs-on: [self-hosted, Linux, X64, azimara-mesh]
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
-      DATABASE_URL: 'file:./ci.db'
+      # Restricted, non-owner application role used by all application queries.
+      DATABASE_URL: 'postgresql://mesh_app:ci_app_password@127.0.0.1:55432/mesh?schema=public'
+      # Table-owner role used only by Prisma CLI and test fixtures.
+      DATABASE_MIGRATION_URL: 'postgresql://mesh_migrator:ci_migrator_password@127.0.0.1:55432/mesh?schema=public'
       SESSION_SECRET: 'ci-only-session-secret-not-for-production'
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
@@ -32,14 +35,36 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Start disposable PostgreSQL
+        run: |
+          docker rm -f mesh-ci-postgres >/dev/null 2>&1 || true
+          docker run -d --name mesh-ci-postgres \
+            -e POSTGRES_DB=mesh \
+            -e POSTGRES_USER=mesh_bootstrap \
+            -e POSTGRES_PASSWORD=ci_bootstrap_password \
+            -p 127.0.0.1:55432:5432 \
+            postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec mesh-ci-postgres pg_isready -U mesh_bootstrap -d mesh >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec mesh-ci-postgres pg_isready -U mesh_bootstrap -d mesh
+
+      - name: Bootstrap database roles
+        env:
+          POSTGRES_ADMIN_PASSWORD: ci_bootstrap_password
+          MESH_MIGRATOR_PASSWORD: ci_migrator_password
+          MESH_APP_PASSWORD: ci_app_password
+        run: bash scripts/postgres-bootstrap.sh
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Generate Prisma client
         run: bunx prisma generate
 
-      - name: Prepare CI database
-        run: bunx prisma db push --skip-generate
+      - name: Apply migrations
+        run: bunx prisma migrate deploy
 
       - name: Typecheck
         run: bun run typecheck
@@ -50,6 +75,9 @@ jobs:
       - name: Unit tests
         run: bun run test
 
+      - name: Tenant isolation integration tests
+        run: bun run test:postgres
+
       - name: Secret scan
         run: bun run security:scan
 
@@ -58,3 +86,7 @@ jobs:
 
       - name: Verify standalone output
         run: test -f .next/standalone/server.js
+
+      - name: Stop disposable PostgreSQL
+        if: always()
+        run: docker rm -f mesh-ci-postgres >/dev/null 2>&1 || true

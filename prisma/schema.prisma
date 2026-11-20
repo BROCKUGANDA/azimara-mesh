@@ -1,14 +1,16 @@
 // AZIMARA MESH — Enterprise AI Agent Fleet Operating System
 // Data model: multi-tenant control plane + execution telemetry + governance + commercial
-// SQLite (single-node demo deployment). JSON payloads stored as text columns (specJson etc.)
+// PostgreSQL is the authoritative commercial datastore. JSON payloads remain
+// text where an explicit versioned contract is maintained by the domain layer.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_MIGRATION_URL")
 }
 
 // ---------------------------------------------------------------------------

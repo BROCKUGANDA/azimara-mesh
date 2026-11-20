@@ -5,6 +5,7 @@ import { createHmac, randomBytes, scryptSync, timingSafeEqual, createHash } from
 import { cookies } from 'next/headers'
 import type { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
+import { setDatabaseContext } from '@/lib/db-context'
 import { ROLE_RANK, type Role } from '@/lib/types'
 
 const SESSION_COOKIE = 'mesh_session'
@@ -92,6 +93,7 @@ export async function getSessionUser(): Promise<{ userId: string } | null> {
   const jar = await cookies()
   const session = await readSessionToken(jar.get(SESSION_COOKIE)?.value)
   if (!session) return null
+  setDatabaseContext({ userId: session.userId })
   // A signed cookie is not a revocation mechanism: check account status on
   // every request so suspended users lose access immediately.
   const user = await db.user.findUnique({ where: { id: session.userId }, select: { status: true } })
@@ -139,6 +141,7 @@ export class PermissionError extends Error {
 }
 
 export async function buildSessionContext(userId: string, activeWorkspaceId?: string | null): Promise<SessionContext> {
+  setDatabaseContext({ userId })
   const user = await db.user.findUnique({ where: { id: userId } })
   if (!user || user.status === 'suspended') throw new AuthError('UNAUTHENTICATED', 'Account unavailable')
   const memberships = await db.membership.findMany({

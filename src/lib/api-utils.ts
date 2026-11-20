@@ -3,6 +3,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { getSessionUser, requireWorkspaceAccess, AuthError, PermissionError } from '@/lib/auth'
+import { runWithDatabaseContext, setDatabaseContext } from '@/lib/db-context'
 import type { Role } from '@/lib/types'
 
 export interface ApiContext {
@@ -28,6 +29,11 @@ export async function apiContext(req: NextRequest, minimumRole: Role = 'viewer')
     db.user.findUnique({ where: { id: session.userId } }),
     db.workspace.findUnique({ where: { id: workspaceId } }),
   ])
+  setDatabaseContext({
+    userId: session.userId,
+    workspaceId,
+    organizationId: workspace?.organizationId ?? '',
+  })
   return {
     userId: session.userId,
     userName: user?.name ?? 'operator',
@@ -52,25 +58,27 @@ export function assertWorkspace(
 }
 
 export async function withApi<T>(handler: () => Promise<T>): Promise<Response> {
-  try {
-    const data = await handler()
-    if (data instanceof Response) return data
-    return Response.json(data as object)
-  } catch (err) {
-    if (err instanceof AuthError) {
-      return Response.json({ error: { code: err.code, message: err.message } }, { status: err.status })
+  return runWithDatabaseContext({}, async () => {
+    try {
+      const data = await handler()
+      if (data instanceof Response) return data
+      return Response.json(data as object)
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return Response.json({ error: { code: err.code, message: err.message } }, { status: err.status })
+      }
+      if (err instanceof PermissionError) {
+        return Response.json({ error: { code: err.code, message: err.message } }, { status: err.status })
+      }
+      // Internal error details are for the server log only. Returning err.message
+      // here leaks database schema, file paths and secret references to callers.
+      console.error('[api] unhandled error:', err)
+      return Response.json(
+        { error: { code: 'INTERNAL', message: 'An internal error occurred' } },
+        { status: 500 },
+      )
     }
-    if (err instanceof PermissionError) {
-      return Response.json({ error: { code: err.code, message: err.message } }, { status: err.status })
-    }
-    // Internal error details are for the server log only. Returning err.message
-    // here leaks database schema, file paths and secret references to callers.
-    console.error('[api] unhandled error:', err)
-    return Response.json(
-      { error: { code: 'INTERNAL', message: 'An internal error occurred' } },
-      { status: 500 },
-    )
-  }
+  })
 }
 
 export async function readJson<T>(req: NextRequest): Promise<T> {

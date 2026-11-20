@@ -9,11 +9,12 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "bun test tests/unit.test.ts",
+    "test:postgres": "bun test tests/postgres-tenant.test.ts",
     "security:scan": "node scripts/secret-scan.mjs",
-    "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
