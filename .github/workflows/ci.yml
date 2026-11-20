@@ -17,7 +17,7 @@ concurrency:
 jobs:
   verify:
     name: Verify (self-hosted VPS)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64, azimara-mesh]
     timeout-minutes: 25
     env:
       DATABASE_URL: 'file:./ci.db'

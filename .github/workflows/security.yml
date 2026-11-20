@@ -21,7 +21,7 @@ concurrency:
 jobs:
   audit:
     name: Dependency and secret audit (self-hosted VPS)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64, azimara-mesh]
     timeout-minutes: 20
     steps:
       - name: Checkout

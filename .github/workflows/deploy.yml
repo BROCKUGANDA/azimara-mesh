@@ -27,7 +27,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy to ${{ inputs.environment }} (self-hosted VPS)
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64, azimara-mesh]
     timeout-minutes: 30
     environment: ${{ inputs.environment }}
     env:
