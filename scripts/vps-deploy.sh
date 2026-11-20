@@ -18,7 +18,9 @@ if [ -d "$TARGET_DIR" ]; then
 fi
 
 mkdir -p "$TARGET_DIR"
-rsync -a --delete .next/standalone/ "$TARGET_DIR/"
+# Protected paths are runtime state, not build artifacts. `--delete` must not
+# remove them on every release (that would erase the database and env file).
+rsync -a --delete --exclude='.env' --exclude='db/' .next/standalone/ "$TARGET_DIR/"
 mkdir -p "$TARGET_DIR/.next"
 rsync -a --delete .next/static/ "$TARGET_DIR/.next/static/"
 mkdir -p "$TARGET_DIR/public"
@@ -32,9 +34,16 @@ if [ -n "${MESH_ENV:-}" ]; then
 fi
 
 # Materialize the database and schema only after the artifact is in place.
+# Pin the CLI major: `bunx prisma` on a bare runner resolves to the latest
+# major (8.x), which removed `db push`. Keep this in step with package.json.
+PRISMA_VERSION="$(node -p "require('./package.json').devDependencies.prisma.replace(/[^\d.]/g, '')")"
+# The standalone artifact does not ship the Prisma schema; stage it from the
+# checked-out workspace so `db push` has a contract to apply.
+mkdir -p "$TARGET_DIR/prisma"
+cp prisma/schema.prisma "$TARGET_DIR/prisma/schema.prisma"
 cd "$TARGET_DIR"
-if [ -f node_modules/.prisma/client/schema.prisma ] || [ -d node_modules/@prisma/client ]; then
-  bunx prisma db push --skip-generate || echo "::warning::prisma db push failed; inspect before promoting"
+if [ -n "$PRISMA_VERSION" ]; then
+  bunx "prisma@${PRISMA_VERSION}" db push --skip-generate || echo "::warning::prisma db push failed; inspect before promoting"
 fi
 
 if command -v systemctl >/dev/null && sudo -n true 2>/dev/null; then
