@@ -36,7 +36,10 @@ fi
 # Materialize the database and schema only after the artifact is in place.
 # Pin the CLI major: `bunx prisma` on a bare runner resolves to the latest
 # major (8.x), which removed `db push`. Keep this in step with package.json.
-PRISMA_VERSION="$(node -p "require('./package.json').devDependencies.prisma.replace(/[^\d.]/g, '')")"
+# Keep this in step with the `prisma` version in package.json. A literal is
+# intentional: the standalone package.json does not carry devDependencies, so
+# runtime introspection is unreliable on the runner.
+PRISMA_VERSION="6.19.2"
 # The standalone artifact does not ship the Prisma schema; stage it from the
 # checked-out workspace so `db push` has a contract to apply.
 mkdir -p "$TARGET_DIR/prisma"
