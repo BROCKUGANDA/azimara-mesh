@@ -46,7 +46,8 @@ mkdir -p "$TARGET_DIR/prisma"
 cp prisma/schema.prisma "$TARGET_DIR/prisma/schema.prisma"
 cd "$TARGET_DIR"
 if [ -n "$PRISMA_VERSION" ]; then
-  bunx "prisma@${PRISMA_VERSION}" db push --skip-generate || echo "::warning::prisma db push failed; inspect before promoting"
+  # `bunx` is not on PATH in a non-login runner shell; `bun x` is.
+  bun x "prisma@${PRISMA_VERSION}" db push --skip-generate || echo "::warning::prisma db push failed; inspect before promoting"
 fi
 
 if command -v systemctl >/dev/null && sudo -n true 2>/dev/null; then
