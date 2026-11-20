@@ -1,8 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
 import { createHash, randomBytes } from 'node:crypto'
-import { migrationDb } from '../src/lib/db'
-import { runWithDatabaseContext } from '../src/lib/db-context'
-import { db } from '../src/lib/db'
+import { db, migrationDb } from '@/lib/db'
+import { runWithDatabaseContext } from '@/lib/db-context'
 
 /**
  * Integration test for database-enforced tenant isolation. Run only against a
@@ -78,14 +77,13 @@ describe('PostgreSQL row-level security', () => {
 
   test('write is rejected for another workspace', async () => {
     if (!/^postgres/i.test(process.env.DATABASE_URL ?? '')) return
-    await expect(
-      runWithDatabaseContext(
-        { userId: 'u1', workspaceId: wsA, organizationId: orgId },
-        () => db.agent.create({
-          data: { workspaceId: wsB, name: 'bad', slug: `bad-${suffix}`, createdBy: 'rls-test' },
-        }),
-      ),
-    ).rejects.toThrow()
+    const write = runWithDatabaseContext(
+      { userId: 'u1', workspaceId: wsA, organizationId: orgId },
+      () => db.agent.create({
+        data: { workspaceId: wsB, name: 'bad', slug: `bad-${suffix}`, createdBy: 'rls-test' },
+      }),
+    )
+    await expect(Promise.resolve(write)).rejects.toThrow()
   })
 
   test('hashes differ for distinct keys', () => {

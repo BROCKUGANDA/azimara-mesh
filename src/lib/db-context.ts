@@ -15,11 +15,16 @@ export interface DatabaseContext {
 
 const storage = new AsyncLocalStorage<DatabaseContext>()
 
-export function runWithDatabaseContext<T>(
+/**
+ * Keep the context active until the callback's returned promise settles.
+ * Prisma queries are lazy PrismaPromises: they execute on await, not when the
+ * model method is called, so a synchronous wrapper would lose the context.
+ */
+export async function runWithDatabaseContext<T>(
   context: DatabaseContext,
-  callback: () => T,
-): T {
-  return storage.run({ ...context }, callback)
+  callback: () => T | Promise<T>,
+): Promise<T> {
+  return storage.run({ ...context }, async () => await callback())
 }
 
 export function getDatabaseContext(): DatabaseContext | undefined {
@@ -28,7 +33,7 @@ export function getDatabaseContext(): DatabaseContext | undefined {
 
 /**
  * Add validated identity claims to the current request/job context. The
- * fallback `enterWith` supports server entry points that do not use withApi;
+ * fallback `enterWith` supports entry points that do not use the wrapper;
  * API requests should be wrapped in runWithDatabaseContext for isolation.
  */
 export function setDatabaseContext(update: Omit<DatabaseContext, 'transactionClient'>): void {

@@ -68,11 +68,12 @@ const rlsExtension = Prisma.defineExtension((client) =>
         const context = getDatabaseContext()
         if (!usesPostgres() || !context || !model) return query(args)
         if (context.transactionClient) return query(args)
-        const [result] = (await basePrisma.$transaction([
+        const results = (await basePrisma.$transaction([
           claimStatement(),
           query(args),
         ])) as unknown[]
-        return result
+        // The first result is the claim statement; the query result is last.
+        return results[results.length - 1]
       },
     },
   }),
