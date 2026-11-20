@@ -1,0 +1,54 @@
+name: Security
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'bun.lock'
+      - 'scripts/secret-scan.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Dependency and secret audit (self-hosted VPS)
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Scan tracked files for secrets
+        run: bun run security:scan
+
+      - name: Generate lockfile for npm audit
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Audit dependency tree
+        run: npm audit --audit-level=high
+
+      - name: Check for tracked runtime state
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$|\.db$|\.session-secret$'; then
+            echo "::error::Repository contains runtime state or environment files"
+            exit 1
+          fi

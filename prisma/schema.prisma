@@ -1,0 +1,761 @@
+// AZIMARA MESH — Enterprise AI Agent Fleet Operating System
+// Data model: multi-tenant control plane + execution telemetry + governance + commercial
+// SQLite (single-node demo deployment). JSON payloads stored as text columns (specJson etc.)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy & identity
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  planTier  String   @default("team") // community | builder | team | enterprise
+  dataResidency String @default("global")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspaces   Workspace[]
+  environments Environment[]
+}
+
+model Workspace {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String   @default("")
+  monthlyBudget  Float    @default(500) // USD, hard cap for metered consumption
+  dataClassification String @default("internal") // public | internal | confidential | restricted
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  agents       Agent[]
+  members      Membership[]
+  tools        Tool[]
+  namespaces   MemoryNamespace[]
+  datasets     EvalDataset[]
+  connections  ModelConnection[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  avatarHue    Int      @default(210)
+  title        String   @default("")
+  status       String   @default("active") // active | invited | suspended
+  mfaEnabled   Boolean  @default(false)
+  ssoProvider  String?  // null for password auth; sso | scim for enterprise
+  isDemo       Boolean  @default(true) // demo tenants see role boards + DEMO MODE badge; real users land on the production board
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  memberships  Membership[]
+}
+
+model Membership {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        String   @default("viewer") // owner | admin | operator | viewer
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([userId, workspaceId])
+}
+
+model ServiceIdentity {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  kind         String   @default("workload") // workload | delegated | service_account
+  agentId      String?  // bound agent for workload identities
+  scopes       String   @default("[]") // JSON array of scope strings
+  keyFingerprint String @default("")
+  status       String   @default("active") // active | revoked | rotated
+  lastUsedAt   DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  @@index([workspaceId])
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  prefix      String   @unique
+  hashedKey   String
+  scopes      String   @default("[\"executions:read\"]")
+  createdBy   String
+  status      String   @default("active") // active | revoked
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  @@index([workspaceId])
+}
+
+// ---------------------------------------------------------------------------
+// Environments & deployments
+// ---------------------------------------------------------------------------
+
+model Environment {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String   // development | staging | production (+ custom)
+  slug           String
+  kind           String   @default("cloud") // cloud | vpc | self_hosted | kubernetes | local
+  autoPromote    Boolean  @default(false)
+  requiresApproval Boolean @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, slug])
+}
+
+model Deployment {
+  id          String   @id @default(cuid())
+  workspaceId String
+  agentId     String
+  versionId   String
+  environment String   // development | staging | production
+  strategy    String   @default("rolling") // rolling | canary | all_at_once
+  canaryPct   Int      @default(0)
+  status      String   @default("pending") // pending | validating | deploying | healthy | degraded | failed | rolled_back | suspended
+  healthGate  String   @default("{}") // JSON {errorRateThreshold, latencyP95Ms, evalGate}
+  errorRate   Float    @default(0)
+  latencyP95  Float    @default(0)
+  evalScore   Float    @default(0)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  agent       Agent    @relation(fields: [agentId], references: [id])
+
+  @@index([workspaceId])
+  @@index([agentId])
+}
+
+// ---------------------------------------------------------------------------
+// Agents & fleets
+// ---------------------------------------------------------------------------
+
+model Agent {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  fleetId          String?
+  name             String
+  slug             String
+  description      String   @default("")
+  category         String   @default("custom") // research | coding | data_analysis | customer_ops | workflow | knowledge | planning | monitoring | autonomous | custom
+  framework        String   @default("azimara-native") // azimara-native | langgraph | crewai | openai-agents | mcp-client | custom
+  runtimeType      String   @default("managed") // managed | vpc | self_hosted | local
+  status           String   @default("draft") // registry status: draft | validating | testing | ready | deploying | healthy | degraded | paused | failed | scaling | rolling_back | retiring | archived
+  autonomyLevel    String   @default("A1") // A0 observe | A1 recommend | A2 human-approved | A3 bounded
+  currentVersion   String   @default("0.0.0")
+  ownerName        String   @default("")
+  modelConfigJson  String   @default("{}") // JSON {primary, fallback, temperature, maxTokens, routing}
+  toolPermissionsJson String @default("[]") // JSON array of tool ids
+  memoryConfigJson String   @default("{}") // JSON {namespaces[], contextTokens, ttlDays}
+  policyRefsJson   String   @default("[]") // JSON array of policy ids
+  resourceLimitsJson String @default("{}") // JSON {maxSteps, maxDelegationDepth, timeoutMs, monthlyBudget}
+  evalProfileJson  String   @default("{}") // JSON {datasetId, gates:{minScore, safety}}
+  inputSchemaJson  String   @default("{}")
+  outputSchemaJson String   @default("{}")
+  systemPrompt     String   @default("")
+  spendMonth       Float    @default(0)   // current-month metered spend (USD)
+  successRate      Float    @default(0)   // rolling success rate 0..1
+  avgLatencyMs     Float    @default(0)
+  healthStatus     String   @default("unknown") // healthy | degraded | offline | unknown
+  lastActiveAt     DateTime?
+  createdBy        String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id])
+  fleet      Fleet?     @relation(fields: [fleetId], references: [id])
+  versions   AgentVersion[]
+  executions Execution[]
+  deployments Deployment[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@index([fleetId])
+  @@index([status])
+}
+
+model AgentVersion {
+  id                String   @id @default(cuid())
+  agentId           String
+  version           String
+  changelog         String   @default("")
+  snapshotJson      String   @default("{}") // immutable full config snapshot (prompt, model, tools, memory, limits)
+  diffSummaryJson   String   @default("[]") // JSON [{field, from, to}]
+  evalScore         Float?
+  status            String   @default("draft") // draft | published | retired | rolled_back
+  publishedAt       DateTime?
+  createdBy         String
+  createdAt         DateTime @default(now())
+  agent             Agent    @relation(fields: [agentId], references: [id])
+
+  @@unique([agentId, version])
+  @@index([agentId])
+}
+
+model Fleet {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  description    String   @default("")
+  department     String   @default("")
+  ownerName      String   @default("")
+  monthlyBudget  Float    @default(200)
+  concurrencyCap Int      @default(10)
+  sharedPolicyIdsJson String @default("[]")
+  status         String   @default("healthy") // healthy | degraded | paused
+  createdAt      DateTime @default(now())
+  agents         Agent[]
+
+  @@index([workspaceId])
+}
+
+model FleetAgent {
+  fleetId String
+  agentId String
+  role    String @default("member")
+  @@id([fleetId, agentId])
+}
+
+// ---------------------------------------------------------------------------
+// Workflows (durable orchestration)
+// ---------------------------------------------------------------------------
+
+model Workflow {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  slug           String
+  description    String   @default("")
+  version        Int      @default(1)
+  status         String   @default("draft") // draft | published | archived
+  specJson       String   @default("{}")   // versioned workflow spec: nodes, edges, schemas, retry, budgets
+  inputSchemaJson  String @default("{}")
+  outputSchemaJson String @default("{}")
+  triggerType    String   @default("manual") // manual | webhook | schedule | event
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  executions     Execution[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model Schedule {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  cronExpr    String
+  targetKind  String   @default("workflow") // workflow | agent
+  targetId    String
+  targetName  String
+  payloadJson String  @default("{}")
+  timezone    String   @default("UTC")
+  status      String   @default("active") // active | paused
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  createdAt   DateTime @default(now())
+  @@index([workspaceId])
+}
+
+// ---------------------------------------------------------------------------
+// Executions (control + telemetry)
+// ---------------------------------------------------------------------------
+
+model Execution {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  kind             String   @default("agent_run") // agent_run | workflow_run
+  agentId          String?
+  workflowId       String?
+  agentVersion     String?  // pinned version at start (immutability rule)
+  workflowVersion  Int?
+  parentExecutionId String? // delegation chain
+  delegationDepth  Int      @default(0)
+  trigger          String   @default("manual") // manual | api | schedule | webhook | replay | delegation
+  correlationId    String   @default("")
+  status           String   @default("queued") // queued | running | waiting_approval | succeeded | failed | cancelled | timed_out | dead_letter
+  inputJson        String   @default("{}")
+  outputJson       String?
+  error            String?
+  identitySubject  String   @default("") // executing identity (agent workload id)
+  startedAt        DateTime @default(now())
+  finishedAt       DateTime?
+  durationMs       Int      @default(0)
+  tokenIn          Int      @default(0)
+  tokenOut         Int      @default(0)
+  costUsd          Float    @default(0)
+  toolCallCount    Int      @default(0)
+  retryCount       Int      @default(0)
+  budgetCapsJson   String   @default("{}") // {maxSteps, timeoutMs, maxCostUsd, maxDelegationDepth}
+  checkpointJson   String   @default("{}") // durable state for recovery/replay
+  isReplay         Boolean  @default(false)
+  stepSeq          Int      @default(0)   // atomic step-sequence allocator (prevents duplicate seq races)
+  agent            Agent?    @relation(fields: [agentId], references: [id])
+  workflow         Workflow? @relation(fields: [workflowId], references: [id])
+  steps            ExecutionStep[]
+
+  @@index([workspaceId])
+  @@index([agentId])
+  @@index([workflowId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model ExecutionStep {
+  id          String   @id @default(cuid())
+  executionId String
+  seq         Int
+  nodeKey     String   @default("")
+  kind        String   // context_assembly | memory_retrieval | model_request | tool_call | delegation | policy_check | approval_wait | condition | delay | fan_out | fan_in | evaluation | output | error | checkpoint
+  label       String
+  status      String   @default("succeeded") // running | succeeded | failed | denied | skipped | waiting_approval
+  detailJson  String   @default("{}") // kind-specific telemetry (model, tokens, tool, policy decision ref...)
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+  durationMs  Int      @default(0)
+  execution   Execution @relation(fields: [executionId], references: [id])
+
+  @@unique([executionId, seq])
+  @@index([executionId])
+}
+
+model AgentMessage {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  executionId    String?
+  senderId       String
+  recipientId    String
+  type           String   @default("task") // task | result | event | control
+  schemaVersion  String   @default("1.0")
+  correlationId  String
+  payloadJson    String   @default("{}")
+  authContextJson String  @default("{}")
+  expiryAt       DateTime?
+  status         String   @default("delivered") // delivered | rejected | expired | duplicate
+  rejectionReason String?
+  createdAt      DateTime @default(now())
+  @@index([workspaceId])
+  @@index([executionId])
+}
+
+// ---------------------------------------------------------------------------
+// Intelligence plane: providers, models, memory
+// ---------------------------------------------------------------------------
+
+model ModelProvider {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  kind        String   @default("api") // api | bedrock | azure | local | internal
+  status      String   @default("healthy") // healthy | degraded | offline
+  latencyMs   Float    @default(420)
+  errorRate   Float    @default(0.01)
+  apiKeyRef   String?  // secret reference — never raw keys
+  byok        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  models      Model[]
+  connections ModelConnection[]
+}
+
+model Model {
+  id            String   @id @default(cuid())
+  providerId    String
+  name          String
+  modelId       String
+  contextWindow Int      @default(128000)
+  inputCostPerMtok  Float @default(0.5)
+  outputCostPerMtok Float @default(1.5)
+  capabilitiesJson String @default("[]") // ["chat","tools","streaming","structured","vision"]
+  taskClassesJson  String @default("[]") // ["research","coding","extraction","summarization"]
+  maxOutputTokens Int     @default(4096)
+  status      String    @default("available") // available | deprecated | preview
+  provider    ModelProvider @relation(fields: [providerId], references: [id])
+}
+
+model ModelConnection {
+  id          String   @id @default(cuid())
+  workspaceId String
+  providerId  String
+  name        String
+  authMode    String   @default("platform") // platform | byok
+  secretRef   String?  // secret brokerage reference
+  status      String   @default("connected") // connected | error | unverified
+  lastCheckedAt DateTime?
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  provider    ModelProvider @relation(fields: [providerId], references: [id])
+}
+
+model PromptTemplate {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  slug        String
+  body        String
+  variablesJson String @default("[]")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  @@index([workspaceId])
+}
+
+model MemoryNamespace {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  slug           String
+  kind           String   @default("semantic") // working | episodic | semantic | shared | longterm
+  classification String   @default("internal") // public | internal | confidential | restricted
+  allowedRolesJson String @default("[\"owner\",\"admin\",\"operator\"]")
+  retentionDays  Int      @default(90)
+  recordCount    Int      @default(0)
+  indexStatus    String   @default("indexed") // indexed | indexing | stale
+  description    String   @default("")
+  createdAt      DateTime @default(now())
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  records        MemoryRecord[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model MemoryRecord {
+  id           String   @id @default(cuid())
+  namespaceId  String
+  agentId      String?  // origin agent
+  content      String
+  classification String @default("internal")
+  provenance   String   @default("manual") // manual | ingestion | execution | synthetic
+  ttlAt        DateTime?
+  score        Float    @default(0) // retrieval relevance (demo embedding proxy)
+  createdAt    DateTime @default(now())
+  namespace    MemoryNamespace @relation(fields: [namespaceId], references: [id])
+  @@index([namespaceId])
+}
+
+// ---------------------------------------------------------------------------
+// Tools & integrations
+// ---------------------------------------------------------------------------
+
+model Tool {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  slug           String
+  kind           String   @default("http") // http | mcp | internal | database | webhook | filesystem
+  version        String   @default("1.0.0")
+  description    String   @default("")
+  provider       String   @default("")
+  inputSchemaJson  String @default("{}")
+  outputSchemaJson String @default("{}")
+  authMethod     String   @default("api_key") // none | api_key | oauth2 | service_identity
+  secretRef      String?
+  riskClass      String   @default("low") // low | medium | high | critical
+  dataClass      String   @default("internal") // public | internal | confidential | restricted
+  rateLimitPerMin Int     @default(60)
+  timeoutMs      Int      @default(8000)
+  requiresApproval Boolean @default(false)
+  status         String   @default("healthy") // healthy | degraded | offline | suspended
+  ownerName      String   @default("")
+  callCount      Int      @default(0)
+  errorCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model ToolCall {
+  id          String   @id @default(cuid())
+  executionId String
+  toolId      String
+  toolName    String
+  status      String   // succeeded | failed | denied | timeout | approval_required
+  latencyMs   Int      @default(0)
+  inputJson   String   @default("{}")  // redacted in API responses
+  outputJson  String?
+  error       String?
+  policyDecisionId String?
+  createdAt   DateTime @default(now())
+  @@index([executionId])
+  @@index([toolId])
+}
+
+model Integration {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  category    String   @default("communication") // communication | devops | crm | data | billing
+  status      String   @default("connected") // connected | disconnected | error
+  authMethod  String   @default("oauth2")
+  configJson  String   @default("{}")
+  lastSyncAt  DateTime?
+  createdAt   DateTime @default(now())
+  @@index([workspaceId])
+}
+
+// ---------------------------------------------------------------------------
+// Trust plane: policies, approvals, audit, security
+// ---------------------------------------------------------------------------
+
+model Policy {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  slug        String
+  kind        String   @default("guardrail") // guardrail | approval | budget | model | data | environment
+  effect      String   @default("deny") // allow | deny | require_approval
+  priority    Int      @default(100)
+  rulesJson   String   @default("[]") // JSON [{field, operator, value}] deterministic conditions
+  appliesToJson String @default("{}") // JSON {agents[], tools[], environments[], taskClasses[], dataClasses[]}
+  description String   @default("")
+  status      String   @default("active") // active | draft | disabled
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model PolicyDecision {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  executionId  String?
+  policyId     String?
+  policyName   String
+  subject      String   // agent id / user id / identity
+  action       String   // tool_invoke | model_route | deployment | memory_read | agent_message | workspace_op
+  resource     String   @default("")
+  decision     String   // allow | deny | require_approval
+  reason       String
+  contextJson  String   @default("{}") // full evaluation context (why panel data)
+  createdAt    DateTime @default(now())
+  @@index([workspaceId])
+  @@index([executionId])
+}
+
+model Approval {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  executionId   String?
+  kind          String   // tool_usage | deployment | external_transmission | financial | privileged | delegation
+  title         String
+  detailJson    String   @default("{}")
+  requestedBy   String   // agent identity
+  riskClass     String   @default("high")
+  status        String   @default("pending") // pending | approved | rejected | expired
+  reviewerRole  String   @default("admin")
+  decidedBy     String?
+  decisionNote  String?
+  decidedAt     DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  organizationId String
+  workspaceId String?
+  actorType   String   @default("user") // user | agent | system | service_identity
+  actorId     String   @default("")
+  actorName   String   @default("")
+  action      String   // agent.create, agent.publish, execution.start, policy.update, approval.decide, security.suspend ...
+  resourceType String  @default("")
+  resourceId  String   @default("")
+  severity    String   @default("info") // info | notice | warning | critical
+  detailJson  String   @default("{}")
+  ip          String   @default("10.0.0.0")
+  createdAt   DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+model SecurityIncident {
+  id          String   @id @default(cuid())
+  workspaceId String
+  kind        String   // prompt_injection | permission_violation | cost_anomaly | credential_anomaly | data_exfiltration | communication_anomaly | repeated_failure
+  severity    String   @default("medium") // low | medium | high | critical
+  title       String
+  detailJson  String   @default("{}")
+  agentId     String?
+  executionId String?
+  status      String   @default("open") // open | investigating | contained | resolved
+  openedAt    DateTime @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  notesJson   String   @default("[]")
+  @@index([workspaceId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation Lab
+// ---------------------------------------------------------------------------
+
+model EvalDataset {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  slug        String
+  description String   @default("")
+  category    String   @default("quality") // quality | safety | regression | adversarial
+  createdAt   DateTime @default(now())
+  cases       EvalCase[]
+  runs        EvalRun[]
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+}
+
+model EvalCase {
+  id          String   @id @default(cuid())
+  datasetId   String
+  name        String
+  inputJson   String   @default("{}")
+  expectedJson String  @default("{}") // {contains[], regex, format, maxLatencyMs, refuseKeywords[]}
+  evaluator   String   @default("deterministic") // deterministic | model_judge
+  weight      Float    @default(1)
+  dataset     EvalDataset @relation(fields: [datasetId], references: [id])
+  @@index([datasetId])
+}
+
+model EvalRun {
+  id          String   @id @default(cuid())
+  workspaceId String
+  datasetId   String
+  agentId     String?
+  agentVersion String?
+  modelId     String?
+  label       String   @default("")
+  status      String   @default("queued") // queued | running | completed | failed
+  passRate    Float    @default(0)
+  avgScore    Float    @default(0)
+  avgLatencyMs Float   @default(0)
+  totalCost   Float    @default(0)
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  dataset     EvalDataset @relation(fields: [datasetId], references: [id])
+  results     EvalResult[]
+  @@index([workspaceId])
+}
+
+model EvalResult {
+  id        String   @id @default(cuid())
+  runId     String
+  caseId    String
+  caseName  String
+  passed    Boolean
+  score     Float    @default(0)
+  checksJson String  @default("[]") // [{check, passed, detail}]
+  outputText String  @default("")
+  latencyMs Int      @default(0)
+  run       EvalRun  @relation(fields: [runId], references: [id])
+  @@index([runId])
+}
+
+// ---------------------------------------------------------------------------
+// Observability, metering & commercial
+// ---------------------------------------------------------------------------
+
+model UsageEvent {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  kind          String   // agent_active | execution | token_in | token_out | tool_invocation | memory_read | storage_gb_month | eval_case
+  agentId       String?
+  modelId       String?
+  toolId        String?
+  executionId   String?
+  quantity      Float    @default(1)
+  unitCostUsd   Float    @default(0)
+  costUsd       Float    @default(0)
+  idempotencyKey String  @unique
+  recordedAt    DateTime @default(now())
+  @@index([workspaceId])
+  @@index([recordedAt])
+  @@index([kind])
+}
+
+model Plan {
+  id         String  @id @default(cuid())
+  slug       String  @unique
+  name       String
+  priceMonth Float
+  maxAgents  Int
+  maxSeats   Int
+  featuresJson String @default("[]")
+  includedCredits Float @default(0) // USD of metered usage included
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id            String   @id @default(cuid())
+  workspaceId   String   @unique
+  planId        String
+  status        String   @default("active") // active | past_due | canceled
+  seats         Int      @default(5)
+  spendCapUsd   Float    @default(500)
+  paymentMethod String   @default("visa-4242")
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd   DateTime
+  plan          Plan     @relation(fields: [planId], references: [id])
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  workspaceId String
+  number      String   @unique
+  periodStart DateTime
+  periodEnd   DateTime
+  subtotalUsd Float
+  creditsUsd  Float    @default(0)
+  totalUsd    Float
+  status      String   @default("paid") // draft | open | paid | failed
+  linesJson   String   @default("[]")
+  createdAt   DateTime @default(now())
+  @@index([workspaceId])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  workspaceId String
+  kind        String   // approval_request | security | budget | deployment | evaluation | system
+  title       String
+  body        String   @default("")
+  severity    String   @default("info")
+  linkView    String   @default("")
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+  @@index([workspaceId])
+}

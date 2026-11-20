@@ -1,0 +1,13 @@
+# Normalize line endings so the public repository has a single canonical form.
+* text=auto eol=lf
+
+# Binary assets must never be normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.svg text eol=lf
+*.pdf binary

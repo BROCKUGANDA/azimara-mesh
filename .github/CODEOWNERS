@@ -1,0 +1,11 @@
+# Default owners for everything in the repository.
+* @BROCKUGANDA
+
+# Security-sensitive surfaces require an explicit review.
+/src/lib/auth.ts @BROCKUGANDA
+/src/lib/policy-engine.ts @BROCKUGANDA
+/src/lib/execution-engine.ts @BROCKUGANDA
+/src/lib/workflow-engine.ts @BROCKUGANDA
+/src/app/api/ @BROCKUGANDA
+/.github/workflows/ @BROCKUGANDA
+/prisma/schema.prisma @BROCKUGANDA

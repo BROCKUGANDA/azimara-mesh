@@ -1,0 +1,2038 @@
+# AZIMARA MESH
+# MASTER STAFF+ ENGINEERING, PRODUCT DESIGN, ARCHITECTURE AND COMMERCIALIZATION DIRECTIVE
+
+**Brand:** AZIMARA MESH  
+**Parent brand:** AI AZIMARA  
+**Product category:** Enterprise AI Agent Fleet Operating System  
+**Descriptor:** The Governed Operating Fabric for Autonomous AI  
+**Tagline:** Every Agent. One Governed System.  
+**Engineering standard:** Staff Engineer / Principal Engineer  
+**Product maturity target:** Production-grade, enterprise deployable, scalable and independently verifiable.
+
+---
+
+# 0. MISSION
+
+Transform the existing product implementation, or build its first complete implementation if no functional repository exists, into Azimara Mesh.
+
+Azimara Mesh is a platform through which organisations deploy, coordinate, secure, monitor, evaluate and control fleets of AI agents.
+
+It must provide a complete operational lifecycle.
+
+An enterprise must be able to:
+
+1. Register and create agents.
+2. Import existing agents and frameworks.
+3. Configure models and providers.
+4. Assign tools, APIs and integrations.
+5. Define agent permissions and identities.
+6. Organise agents into teams and fleets.
+7. Build multi-agent workflows.
+8. Deploy agents into controlled environments.
+9. Execute tasks and coordinate agent communication.
+10. Monitor execution in real time.
+11. Trace tool calls and agent-to-agent interactions.
+12. Evaluate output quality, safety and reliability.
+13. Manage memory and contextual information.
+14. Control autonomy and human approval requirements.
+15. Manage execution budgets and resource consumption.
+16. Version, test, promote and roll back agents.
+17. Audit every consequential operation.
+18. Measure business and operational performance.
+19. Scale fleets without losing control.
+20. Commercially operate the infrastructure through a subscription and consumption-based product.
+
+This is not merely an agent builder.
+
+It is not simply a workflow canvas.
+
+It is not a chatbot management application.
+
+It is the operational control plane for enterprise AI agent fleets.
+
+The platform must remain provider-neutral, framework-neutral and deployment-flexible.
+
+---
+
+# PART I: ENGINEERING EXECUTION RULES
+
+## 1. Repository-first engineering
+
+Before making changes:
+
+- Inspect the complete repository.
+- Identify the current framework, languages and dependencies.
+- Inspect all existing modules and architectural boundaries.
+- Identify the current authentication system.
+- Inspect database schemas and migrations.
+- Review existing agent execution logic.
+- Inspect queues, workers and scheduling.
+- Review integrations and model providers.
+- Inspect frontend routes and components.
+- Inspect testing and deployment procedures.
+- Identify production blockers.
+- Determine which features already exist and are functional.
+
+Create:
+
+- `docs/engineering/REPOSITORY_AUDIT.md`
+- `docs/engineering/CURRENT_STATE.md`
+- `docs/architecture/TARGET_ARCHITECTURE.md`
+- `docs/engineering/TECHNICAL_GAP_ANALYSIS.md`
+- `docs/engineering/IMPLEMENTATION_ROADMAP.md`
+
+Do not replace a working technology stack simply because another framework is fashionable.
+
+Preserve existing useful implementations.
+
+## 2. Engineering quality
+
+All implementation must include:
+
+- Strict type safety.
+- Input validation.
+- Consistent error contracts.
+- Structured logging.
+- Request correlation.
+- Idempotency where appropriate.
+- Explicit timeout handling.
+- Classified retries.
+- Graceful shutdown.
+- Resource cleanup.
+- Concurrency protection.
+- Permission checks.
+- Secure secret handling.
+- Unit tests.
+- Integration tests.
+- Regression tests.
+
+Avoid:
+
+- Fake success responses.
+- Hardcoded production data.
+- Placeholder integrations presented as functional.
+- In-memory state for durable workflows.
+- Unrestricted agent permissions.
+- Unbounded loops.
+- Infinite agent delegation.
+- Uncontrolled autonomous tool execution.
+- Unvalidated external output.
+- Untracked model spending.
+
+Every feature must be verified against its actual acceptance criteria.
+
+---
+
+# PART II: PRODUCT ARCHITECTURE
+
+## 3. Core architectural model
+
+Build five logically separated infrastructure planes.
+
+### 3.1 Control Plane
+
+The central administrative and configuration system.
+
+Responsible for:
+
+- Organizations.
+- Workspaces.
+- Users.
+- Agent registry.
+- Agent definitions.
+- Agent versions.
+- Teams and fleets.
+- Deployment configuration.
+- Policies.
+- Identity management.
+- Model configuration.
+- Tool registry.
+- Workflow definitions.
+- Approvals.
+- Entitlements.
+- Billing.
+
+The control plane defines what should exist and what is permitted to run.
+
+It must not directly execute arbitrary agent code within API request handlers.
+
+### 3.2 Execution Plane
+
+Runs the actual AI agents.
+
+Responsible for:
+
+- Runtime provisioning.
+- Isolated execution.
+- Workflow execution.
+- Task scheduling.
+- Agent coordination.
+- Tool invocation.
+- Resource management.
+- Checkpointing.
+- Recovery.
+- Cancellation.
+- Autoscaling.
+
+Every execution must have bounded resources, maximum execution time, concurrency constraints and an identifiable execution identity.
+
+### 3.3 Intelligence Plane
+
+Responsible for model and agent intelligence services.
+
+Components:
+
+- Model gateway.
+- Model selection.
+- Model fallback.
+- Prompt registry.
+- Context assembly.
+- Memory retrieval.
+- Embedding services.
+- Evaluation engine.
+- Agent routing.
+- Model performance analysis.
+
+### 3.4 Trust and Governance Plane
+
+Responsible for ensuring the other planes operate within organizational boundaries.
+
+Components:
+
+- Agent identity.
+- Service identity.
+- Authorization.
+- Policy evaluation.
+- Secrets brokerage.
+- Data governance.
+- Human approval.
+- Risk evaluation.
+- Audit records.
+- Security analysis.
+
+The trust plane must enforce permissions independently of the LLM.
+
+### 3.5 Observability and Data Plane
+
+Responsible for platform-wide visibility.
+
+Components:
+
+- Logs.
+- Metrics.
+- Distributed traces.
+- Execution events.
+- Audit evidence.
+- Analytics.
+- Evaluation history.
+- Cost records.
+- Data retention.
+
+Use OpenTelemetry-compatible instrumentation.
+
+## 4. Infrastructure architecture
+
+Evaluate the current stack before selecting technologies.
+
+Potential foundational components:
+
+- PostgreSQL for transactional metadata.
+- Redis for appropriate caching and ephemeral coordination.
+- Object storage for artifacts, datasets and large execution outputs.
+- pgvector or a dedicated vector store for semantic retrieval.
+- NATS, Kafka, SQS or equivalent event infrastructure.
+- Temporal, Step Functions or equivalent durable workflow orchestration.
+- OpenTelemetry for telemetry.
+- Isolated container or microVM execution environments.
+
+Do not deploy every technology simply because it appears in this list.
+
+Choose components according to workload, deployment model, operational complexity and demonstrated need.
+
+Design for horizontal scalability and clear failure boundaries.
+
+## 5. Multi-tenancy
+
+Build strong organisation isolation.
+
+Hierarchy:
+
+Organization → Workspace → Project → Environment → Agent → Deployment → Execution.
+
+Implement:
+
+- Tenant-aware database access.
+- Workspace boundaries.
+- Project ownership.
+- Environment isolation.
+- Resource quotas.
+- Separate secret scopes.
+- Access control.
+- Audit boundaries.
+- Data retention.
+- Usage attribution.
+
+Cross-tenant access must be denied by default and tested explicitly.
+
+Support multiple customer projects and independent development, staging and production environments.
+
+---
+
+# PART III: AGENT LIFECYCLE MANAGEMENT
+
+## 6. Universal agent registry
+
+Create a unified registry for all agents regardless of framework or implementation language.
+
+Supported agent categories should include:
+
+- Research agents.
+- Coding agents.
+- Data analysis agents.
+- Customer operations agents.
+- Workflow agents.
+- Knowledge retrieval agents.
+- Planning agents.
+- Monitoring agents.
+- Autonomous task agents.
+- Custom enterprise agents.
+
+Every agent requires:
+
+- Stable ID.
+- Display name.
+- Description.
+- Organization.
+- Workspace.
+- Owner.
+- Team.
+- Version.
+- Framework.
+- Runtime type.
+- Model configuration.
+- Tool permissions.
+- Memory configuration.
+- Policy references.
+- Environment.
+- Resource limits.
+- Deployment status.
+- Health status.
+- Cost budget.
+- Evaluation profile.
+- Creation and modification history.
+
+Support import and registration through:
+
+- REST APIs.
+- SDKs.
+- CLI.
+- Agent manifests.
+- Supported framework adapters.
+- MCP-compatible integration paths.
+
+Never require all customer agents to be rewritten in an Azimara-specific framework.
+
+## 7. Agent lifecycle state machine
+
+Implement explicit states:
+
+- DRAFT
+- VALIDATING
+- TESTING
+- READY
+- DEPLOYING
+- HEALTHY
+- DEGRADED
+- PAUSED
+- FAILED
+- SCALING
+- ROLLING_BACK
+- RETIRING
+- ARCHIVED
+
+Enforce state transitions in the backend.
+
+Do not let a frontend component independently change a deployment's actual lifecycle state.
+
+Every state transition must produce an event and audit record.
+
+## 8. Agent version management
+
+Every agent must have immutable published versions.
+
+Support:
+
+- Draft revisions.
+- Version comparison.
+- Prompt diffs.
+- Model configuration diffs.
+- Tool permission diffs.
+- Memory configuration diffs.
+- Evaluation comparisons.
+- Environment promotion.
+- Release notes.
+- Rollback.
+
+An in-flight execution must retain a reference to the exact agent and workflow version under which it started.
+
+Publishing a new version must not silently rewrite running tasks.
+
+## 9. Agent fleet management
+
+Build fleet-level functionality.
+
+Users must be able to:
+
+- Create fleets.
+- Group agents by department.
+- Group agents by business function.
+- Group agents by environment.
+- Assign owners.
+- Apply shared policies.
+- Configure fleet resource budgets.
+- Set concurrency.
+- Monitor fleet health.
+- Pause selected agents.
+- Resume agents.
+- Roll out versions progressively.
+- Roll back a fleet release.
+- Compare fleet performance.
+
+Support individual, group and organization-wide fleet views.
+
+Never apply a fleet-wide mutation without evaluating its target scope and permissions.
+
+---
+
+# PART IV: MULTI-AGENT ORCHESTRATION
+
+## 10. Workflow engine
+
+Implement a durable orchestration engine.
+
+Support:
+
+- Sequential execution.
+- Parallel execution.
+- Conditional branches.
+- Fan-out and fan-in.
+- Agent delegation.
+- Human approval checkpoints.
+- Delays.
+- Scheduled triggers.
+- Event-driven triggers.
+- Webhooks.
+- Error boundaries.
+- Compensation steps.
+- Execution cancellation.
+- Checkpointing.
+- Replay and recovery.
+
+Each workflow must have:
+
+- Workflow ID.
+- Version.
+- Input schema.
+- Output schema.
+- Node definitions.
+- Dependencies.
+- Retry rules.
+- Timeout policies.
+- Resource budgets.
+- Approval requirements.
+- Error handling.
+- Expected results.
+
+Use a directed acyclic graph for normal task dependencies.
+
+Allow cyclic agent behavior only through explicit bounded loop primitives with maximum iterations, timeout, budget and termination conditions.
+
+## 11. Agent-to-agent communication
+
+Create a secure communication protocol.
+
+Every message must include:
+
+- Sender identity.
+- Recipient identity.
+- Tenant context.
+- Workflow ID.
+- Execution ID.
+- Correlation ID.
+- Message type.
+- Schema version.
+- Payload.
+- Timestamp.
+- Expiry.
+- Authorization context.
+
+Enforce:
+
+- Authenticated identities.
+- Message schema validation.
+- Scope-aware permissions.
+- Maximum delegation depth.
+- Message expiry.
+- Duplicate detection.
+- Rate limiting.
+- Bounded fan-out.
+- Loop detection.
+- Audit records.
+
+Do not give one agent another agent's unrestricted credentials.
+
+Do not allow an agent to silently escalate its own privileges.
+
+Agent delegation must inherit only explicitly approved permissions.
+
+## 12. Visual Agent Studio
+
+Create a first-class visual authoring environment.
+
+Include:
+
+- Agent nodes.
+- Input nodes.
+- Model nodes.
+- Tool nodes.
+- Memory nodes.
+- Evaluation nodes.
+- Conditional nodes.
+- Parallel nodes.
+- Agent delegation nodes.
+- Human approval nodes.
+- Output nodes.
+- Error-handling nodes.
+
+Users must be able to:
+
+- Drag and place nodes.
+- Connect nodes.
+- Inspect node configuration.
+- Validate data dependencies.
+- View execution paths.
+- Test individual nodes.
+- Run sandbox simulations.
+- Save drafts.
+- Publish versions.
+- Compare workflows.
+- Export definitions.
+
+Provide a code-first mode.
+
+Visual and code-first representations must remain synchronized through a versioned workflow specification.
+
+Never make a visual diagram the only durable source of truth.
+
+---
+
+# PART V: AGENT RUNTIME AND DEPLOYMENT
+
+## 13. Runtime infrastructure
+
+Build runtime adapters for supported execution environments.
+
+Support a progression toward:
+
+- Managed cloud runtime.
+- Customer VPC runtime.
+- Self-hosted runtime.
+- Kubernetes runtime.
+- Local development runtime.
+- Private enterprise deployment.
+
+Each execution must receive:
+
+- An isolated execution context.
+- A scoped identity.
+- Explicitly authorized tools.
+- Bounded memory and compute.
+- Maximum execution duration.
+- Token and spending limits.
+- Network egress restrictions.
+- Cancellation capability.
+- Telemetry instrumentation.
+
+Evaluate sandboxed containers, gVisor or microVM technologies where isolation requirements justify them.
+
+The agent runtime must not expose host credentials or unrestricted filesystem access.
+
+## 14. Deployment management
+
+Create a deployment pipeline.
+
+Stages:
+
+1. Draft.
+2. Schema validation.
+3. Static validation.
+4. Permission review.
+5. Evaluation suite.
+6. Sandbox execution.
+7. Staging deployment.
+8. Canary rollout.
+9. Production promotion.
+10. Health verification.
+
+Support:
+
+- Immutable deployment artifacts.
+- Version pinning.
+- Canary percentage.
+- Deployment health gates.
+- Error thresholds.
+- Automatic rollout suspension.
+- Manual promotion.
+- Rollback.
+- Deployment history.
+
+A failed evaluation must prevent promotion when the relevant evaluation gate is configured as mandatory.
+
+## 15. Runtime scaling
+
+Implement:
+
+- Queue-based workers.
+- Resource-aware scheduling.
+- Per-tenant concurrency.
+- Per-agent concurrency.
+- Workload priority.
+- Queue fairness.
+- Autoscaling.
+- Scale-to-zero where appropriate.
+- Backpressure.
+- Execution quotas.
+
+Prevent one tenant from monopolizing the execution platform.
+
+Measure real resource consumption rather than assuming every agent execution costs the same.
+
+---
+
+# PART VI: MODEL, MEMORY AND TOOL INFRASTRUCTURE
+
+## 16. Unified Model Gateway
+
+Create a provider-neutral model access layer.
+
+Evaluate integrations for:
+
+- OpenAI.
+- Anthropic.
+- Google Gemini.
+- AWS Bedrock.
+- Azure-hosted models.
+- OpenAI-compatible endpoints.
+- Ollama.
+- Other local or private model endpoints.
+
+Support:
+
+- Provider credentials.
+- Bring Your Own Key.
+- Provider health.
+- Model discovery.
+- Model capability metadata.
+- Context limits.
+- Structured output.
+- Streaming.
+- Tool calling.
+- Rate limits.
+- Model fallback.
+- Usage attribution.
+- Token metering.
+- Cost estimation.
+
+Build policy-based routing.
+
+Possible routing criteria:
+
+- Task class.
+- Expected quality.
+- Latency.
+- Budget.
+- Model availability.
+- Data classification.
+- Context length.
+- Organization policy.
+
+Never route restricted data to a provider that the workspace policy does not permit.
+
+## 17. Memory infrastructure
+
+Implement distinct memory layers:
+
+**Working memory**
+Current execution context.
+
+**Episodic memory**
+Historical task and interaction records.
+
+**Semantic memory**
+Retrieved organizational knowledge.
+
+**Shared workspace memory**
+Information explicitly shared between authorized agents.
+
+**Long-term agent memory**
+Persistent information associated with an agent identity.
+
+Implement:
+
+- Memory namespaces.
+- Tenant isolation.
+- Retrieval permissions.
+- Context limits.
+- TTL.
+- Retention policies.
+- Versioning.
+- Deletion.
+- Export.
+- Memory provenance.
+- Poisoning detection.
+- Data classification.
+
+Do not assume an agent has permission to read all workspace memory.
+
+Every retrieved record must be checked against the requesting agent's authorization scope.
+
+## 18. Tool and integration gateway
+
+Build a centralized tool registry.
+
+Support:
+
+- MCP-compatible servers.
+- HTTP APIs.
+- REST integrations.
+- Webhooks.
+- Internal enterprise tools.
+- Database connectors.
+- Search providers.
+- File systems.
+- Cloud service APIs.
+
+For each tool require:
+
+- Tool ID.
+- Name.
+- Version.
+- Description.
+- Input schema.
+- Output schema.
+- Provider.
+- Authentication method.
+- Required permissions.
+- Risk class.
+- Rate limits.
+- Execution timeout.
+- Availability.
+- Data classification.
+
+Every tool call must be checked by a deterministic policy layer.
+
+Tool outputs are untrusted input.
+
+Add schema validation, sensitive-data controls, output limits, command restrictions and prompt-injection defenses.
+
+Build tool health monitoring and integration diagnostics.
+
+---
+
+# PART VII: TRUST, SECURITY AND GOVERNANCE
+
+## 19. Agent identity
+
+Provide every agent with a unique identity.
+
+Support:
+
+- Agent authentication.
+- Workload identity.
+- Delegated identity.
+- Service accounts.
+- Scoped permissions.
+- Temporary credentials.
+- Identity revocation.
+- Rotation.
+- Identity lifecycle management.
+
+An agent's identity must be distinguishable from its owner, operator, execution worker and model provider.
+
+## 20. Permission system
+
+Implement:
+
+- RBAC.
+- ABAC.
+- Workspace permissions.
+- Project permissions.
+- Resource permissions.
+- Agent-specific permissions.
+- Tool-specific permissions.
+- Environment-specific restrictions.
+
+Separate permission to edit an agent from permission to deploy it or authorize its production operations.
+
+## 21. Autonomy levels
+
+Offer explicit autonomy controls.
+
+**A0: Observe**
+
+Read approved information and produce reports.
+
+**A1: Recommend**
+
+Analyze information and propose actions.
+
+**A2: Human-approved**
+
+Prepare operations that require authorization before execution.
+
+**A3: Bounded autonomous**
+
+Execute specifically approved operation classes within configured policies, resource scopes and budgets.
+
+Default newly created production agents to conservative autonomy.
+
+High-impact actions must require appropriate approval, regardless of how confident an LLM claims to be.
+
+## 22. Policy engine
+
+Build deterministic policy evaluation.
+
+Evaluate:
+
+- Agent identity.
+- Organization.
+- Workspace.
+- Environment.
+- Model provider.
+- Tool.
+- Action.
+- Data classification.
+- Target resource.
+- Budget.
+- Autonomy level.
+- Approval requirements.
+- Time window.
+
+Provide:
+
+- Allow rules.
+- Deny rules.
+- Constraints.
+- Approval rules.
+- Mandatory evaluations.
+- Spending policies.
+- Model restrictions.
+- Network restrictions.
+- Data handling rules.
+
+Policy evaluation must happen on every consequential tool invocation, not merely when an agent starts.
+
+## 23. Human oversight
+
+Create approval workflows for:
+
+- External data transmission.
+- Financial operations.
+- Production deployment.
+- Sensitive record access.
+- High-risk tool usage.
+- Privileged operations.
+- High-impact agent delegation.
+
+Include approval expiry, plan binding, named reviewers, quorum policies, rejected action handling and audit records.
+
+## 24. Security Center
+
+Monitor:
+
+- Unusual agent behavior.
+- Unexpected tool calls.
+- Permission violations.
+- Repeated failures.
+- Prompt injection indicators.
+- Data exfiltration indicators.
+- Suspicious memory activity.
+- Unusual model usage.
+- Credential anomalies.
+- Excessive execution costs.
+- Agent communication anomalies.
+
+Add security incident classification and investigation history.
+
+Provide:
+
+- Per-agent suspension.
+- Per-tool suspension.
+- Workspace execution suspension.
+- Emergency fleet stop.
+- Credential revocation.
+
+Security monitoring must continue even if the affected agent is paused.
+
+---
+
+# PART VIII: OBSERVABILITY AND EVALUATION
+
+## 25. Fleet observability
+
+Build a comprehensive operational monitoring system.
+
+### Metrics
+
+- Total agents.
+- Healthy agents.
+- Degraded agents.
+- Offline agents.
+- Active executions.
+- Completed executions.
+- Failed executions.
+- Success rate.
+- Mean task duration.
+- Average latency.
+- p50, p95 and p99 latency.
+- Token consumption.
+- Cost per task.
+- Cost per agent.
+- Tool success rate.
+- Model error rate.
+- Queue depth.
+- Evaluation pass rate.
+- Policy violations.
+
+### Distributed tracing
+
+Trace:
+
+- Workflow start.
+- Agent initialization.
+- Model requests.
+- Agent delegation.
+- Tool selection.
+- Tool execution.
+- Memory retrieval.
+- Approval decisions.
+- Output generation.
+- Evaluation.
+- Final completion.
+
+Build a trace waterfall.
+
+Allow authorized operators to inspect execution steps, but redact secrets and sensitive information by default.
+
+### Live execution monitor
+
+Show:
+
+- Agent identity.
+- Current task.
+- Current workflow step.
+- Duration.
+- Tool call.
+- Current model.
+- Resource consumption.
+- Execution state.
+- Errors and warnings.
+
+Provide a safe execution replay that does not repeat external mutations.
+
+## 26. Evaluation Lab
+
+This must be a flagship feature.
+
+Build an independent testing and evaluation environment.
+
+Support:
+
+- Evaluation datasets.
+- Test cases.
+- Golden outputs.
+- Human annotations.
+- Synthetic test generation.
+- Model comparisons.
+- Prompt comparisons.
+- Agent version comparisons.
+- Regression suites.
+- Adversarial testing.
+- Production sample evaluation.
+
+Evaluate:
+
+- Task completion.
+- Correctness.
+- Groundedness.
+- Tool selection.
+- Tool execution success.
+- Reasoning outcome quality.
+- Safety compliance.
+- Policy compliance.
+- Hallucination indicators.
+- Output format validity.
+- Latency.
+- Cost.
+
+Use deterministic tests wherever possible.
+
+Use model-based judges only with documented methodology, calibrated test sets and appropriate human review.
+
+Every production agent should support a defined evaluation profile.
+
+## 27. Optimization Engine
+
+Recommend improvements using real operational evidence.
+
+Examples:
+
+- Select a less expensive model for eligible task classes.
+- Identify repeated failed tool calls.
+- Detect excessive context usage.
+- Find inefficient workflow branches.
+- Recommend concurrency changes.
+- Identify expensive memory retrieval patterns.
+- Identify degraded model providers.
+- Detect prompt regressions.
+
+Recommendations must include evidence and expected impact.
+
+Optimization must never silently change a production agent configuration.
+
+---
+
+# PART IX: PRODUCT DESIGN AND COMPLETE DESIGN SYSTEM
+
+## 28. Brand identity
+
+Use the new AZIMARA MESH identity.
+
+Core visual symbol:
+
+- Central coordination diamond.
+- Four autonomous agent nodes.
+- Connected mesh pathways.
+- Dark geometric outer structure.
+- Indigo, violet and cyan accents.
+
+Use the supplied master icon as the starting source:
+
+`assets/brand/azimara_mesh_mark.svg`
+
+Create:
+
+- Primary icon.
+- Horizontal wordmark.
+- Stacked wordmark.
+- Monochrome logo.
+- White logo.
+- Dark logo.
+- Light logo.
+- Favicon.
+- Browser application icon.
+- Social media logo.
+- Product loading mark.
+
+The icon must work at 16px, 24px, 32px, 48px, 64px and larger.
+
+Redraw or refine it as clean, editable SVG with correct transparent backgrounds. Do not use a raster screenshot as the production logo.
+
+Create `docs/brand/BRAND_GUIDELINES.md`.
+
+## 29. Design philosophy
+
+Build an interface that communicates:
+
+- Precision.
+- Intelligence.
+- Connectivity.
+- Operational control.
+- Trust.
+- Clarity.
+- Technical capability.
+
+Avoid an overused generic chatbot aesthetic.
+
+Do not make the entire interface glow purple.
+
+Use color with restraint. Reserve saturated gradients for brand moments and high-value visualizations.
+
+The interface must be highly usable for an engineer looking at hundreds of agents and an executive looking for the state of the organization's AI operations.
+
+## 30. Design tokens
+
+Create a central token system.
+
+### Brand tokens
+
+| Token | Value |
+|---|---|
+| Mesh Midnight | #0B1020 |
+| Mesh Panel | #111A2E |
+| Mesh Elevated | #17243A |
+| Mesh Border | #2A3A56 |
+| Mesh Violet | #8B7CFF |
+| Mesh Blue | #5D8CFF |
+| Mesh Cyan | #42D9E8 |
+| Mesh Teal | #39C7B2 |
+| Success | #35C991 |
+| Warning | #F2B95D |
+| Danger | #F06B7A |
+| Info | #66A8F8 |
+| Primary Text | #F4F7FC |
+| Secondary Text | #B4C0D4 |
+| Muted Text | #8593AA |
+
+Create semantic aliases rather than using raw color values throughout components.
+
+Provide dark and light themes.
+
+### Typography
+
+Use the existing licensed and supported font system where possible.
+
+Preferred direction:
+- Geist Sans or Inter for product UI.
+- Geist Mono or IBM Plex Mono for technical values.
+
+Typography scale:
+
+| Token | Size |
+|---|---:|
+| Display | 48px |
+| H1 | 36px |
+| H2 | 28px |
+| H3 | 24px |
+| H4 | 20px |
+| Body large | 16px |
+| Body | 14px |
+| Body small | 13px |
+| Caption | 12px |
+| Micro label | 11px |
+
+Define line heights, letter spacing and font weights.
+
+Keep numerical telemetry aligned and tabular.
+
+### Spacing
+
+Use a 4px base system.
+
+Supported spacing:
+4, 8, 12, 16, 20, 24, 32, 40, 48, 64 and 80px.
+
+### Radius
+
+- Small control: 6px.
+- Buttons: 9px.
+- Standard cards: 12px.
+- Large surfaces: 16px.
+- Modal and hero panels: 20px.
+- Pills: full radius.
+
+### Elevation
+
+Use subtle shadows and layered surfaces.
+
+Avoid glassmorphism as the default for every panel.
+
+Use visible borders to separate dense information.
+
+### Motion
+
+Define reusable motion tokens:
+
+- Fast interaction: 120ms.
+- Standard interaction: 180ms.
+- Panel transition: 220ms.
+- Large graph transition: 300ms.
+- Loading shimmer: restrained and non-distracting.
+
+Support reduced-motion preferences.
+
+No flashing indicators or endless animations that impair monitoring.
+
+## 31. Core component library
+
+Implement reusable components.
+
+### Navigation
+- Sidebar.
+- Top bar.
+- Breadcrumbs.
+- Workspace switcher.
+- Environment selector.
+- Command palette.
+- Notification menu.
+- User menu.
+
+### Controls
+- Primary button.
+- Secondary button.
+- Tertiary button.
+- Icon button.
+- Dropdown.
+- Multiselect.
+- Search.
+- Date range.
+- Filter builder.
+- Tabs.
+- Toggle.
+- Checkbox.
+- Radio group.
+
+### Data components
+- Data table.
+- Metric card.
+- Status chip.
+- Trend chart.
+- Time-series chart.
+- Execution timeline.
+- Trace waterfall.
+- Activity feed.
+- Agent health indicator.
+- Resource utilization indicator.
+
+### Workflow components
+- Node.
+- Connector.
+- Agent node.
+- Model node.
+- Tool node.
+- Memory node.
+- Condition node.
+- Approval node.
+- Evaluation node.
+- Error node.
+- Output node.
+
+### Feedback
+- Toast.
+- Alert.
+- Confirmation dialog.
+- Progress indicator.
+- Empty state.
+- Error boundary.
+- Skeleton.
+- Loading state.
+- Permission warning.
+
+Every component must have consistent hover, focus, active, disabled, selected and error states.
+
+## 32. Layout and responsive behaviour
+
+Desktop-first enterprise command interface, with responsive adaptation for smaller screens.
+
+Desktop:
+- 248px sidebar.
+- 64px top bar.
+- Flexible workspace.
+- 12-column content grid.
+
+Tablet:
+- Collapsible navigation.
+- Horizontally scrollable data tables where needed.
+- Responsive panels.
+
+Mobile:
+- Compact navigation.
+- Essential monitoring and approvals.
+- Readable incident and execution views.
+- No attempt to squeeze the full workflow editor into a small viewport.
+
+---
+
+# PART X: FULL PRODUCT INFORMATION ARCHITECTURE
+
+## 33. Navigation
+
+Build the following product navigation.
+
+### OPERATE
+1. Overview.
+2. Agent Fleet.
+3. Workflows.
+4. Executions.
+5. Schedules.
+6. Activity.
+
+### BUILD
+7. Agent Studio.
+8. Agent Catalog.
+9. Templates.
+10. Model Hub.
+11. Tool Registry.
+12. Knowledge and Memory.
+
+### TRUST
+13. Evaluation Lab.
+14. Policies and Guardrails.
+15. Security Center.
+16. Identity and Access.
+17. Audit Center.
+
+### MANAGE
+18. Deployments.
+19. Environments.
+20. Usage and Costs.
+21. Team Management.
+22. Integrations.
+23. Developer Portal.
+24. Billing.
+25. Settings.
+
+## 34. Overview dashboard
+
+Create an operational command center.
+
+Display:
+
+- Registered agents.
+- Healthy agents.
+- Active agents.
+- Degraded agents.
+- Total executions.
+- Successful executions.
+- Failed executions.
+- Average task duration.
+- Agent success rate.
+- Evaluation pass rate.
+- Token consumption.
+- Current spending.
+- Monthly spending.
+- Pending approvals.
+- Security events.
+- Model provider health.
+
+Use actual backend metrics.
+
+Allow filtering by:
+- Organization.
+- Workspace.
+- Project.
+- Environment.
+- Team.
+- Agent.
+- Time range.
+
+Every dashboard metric must link to the underlying records.
+
+Do not fabricate default statistics.
+
+## 35. Agent Fleet page
+
+Create list and graph views.
+
+Columns:
+
+- Agent.
+- Status.
+- Team.
+- Environment.
+- Version.
+- Framework.
+- Model.
+- Active runs.
+- Success rate.
+- Average latency.
+- Spend.
+- Last active.
+- Owner.
+
+Features:
+
+- Search.
+- Filtering.
+- Saved views.
+- Sorting.
+- Pagination.
+- Grouping.
+- Bulk-safe actions.
+- Agent creation.
+- Agent import.
+
+### Agent detail page
+
+Tabs:
+
+1. Overview.
+2. Configuration.
+3. Versions.
+4. Deployments.
+5. Executions.
+6. Tools.
+7. Memory.
+8. Evaluations.
+9. Policies.
+10. Costs.
+11. Audit.
+
+## 36. Agent Studio
+
+Provide:
+
+- Create agent.
+- Configure identity.
+- Select framework.
+- Choose model.
+- Configure instructions.
+- Attach tools.
+- Configure memory.
+- Define input/output.
+- Set execution budgets.
+- Set autonomy.
+- Configure policies.
+- Evaluate.
+- Save draft.
+- Publish.
+
+Provide an interactive workflow canvas and code-first editor.
+
+## 37. Execution Center
+
+Build a dedicated execution explorer.
+
+Show:
+
+- Execution ID.
+- Parent workflow.
+- Agent.
+- Status.
+- Started.
+- Duration.
+- Model usage.
+- Cost.
+- Tool calls.
+- Errors.
+- Retry count.
+
+Execution detail should provide a trace waterfall and chronological timeline.
+
+Show agent handoffs, model requests, tool calls, policies and outputs.
+
+Use redacted data by default.
+
+## 38. Model Hub
+
+Support:
+
+- Providers.
+- Connections.
+- Available models.
+- Model capabilities.
+- Latency.
+- Error rates.
+- Cost.
+- Context limits.
+- Routing rules.
+- Fallback rules.
+- Rate limits.
+- Model health.
+
+Allow BYOK connections.
+
+## 39. Tool Registry
+
+Display:
+
+- Tools.
+- MCP servers.
+- API connectors.
+- Authentication.
+- Permissions.
+- Version.
+- Health.
+- Usage.
+- Errors.
+- Owner.
+
+Provide secure connection testing.
+
+Do not expose stored credentials.
+
+## 40. Evaluation Lab
+
+Create:
+
+- Dataset management.
+- Evaluation suite management.
+- Test runs.
+- Model comparison.
+- Prompt comparison.
+- Agent comparison.
+- Regression reports.
+- Safety results.
+- Historical trends.
+
+## 41. Policy Center
+
+Create:
+
+- Policy inventory.
+- Visual policy editor.
+- Autonomy controls.
+- Tool restrictions.
+- Data policies.
+- Model restrictions.
+- Budget rules.
+- Approval workflows.
+- Environment restrictions.
+- Policy simulation.
+
+Show exactly why a policy decision was made.
+
+## 42. Security Center
+
+Provide:
+
+- Risk overview.
+- Suspicious agent activity.
+- Permission violations.
+- Credential events.
+- Prompt injection findings.
+- Data protection events.
+- Policy violations.
+- Agent suspensions.
+- Security incident investigations.
+
+## 43. Knowledge and Memory
+
+Provide:
+
+- Data sources.
+- Memory namespaces.
+- Retrieval configuration.
+- Memory inspection.
+- Access rules.
+- Retention.
+- Deletion.
+- Indexing status.
+- Retrieval quality.
+- Provenance.
+
+## 44. Deployment Center
+
+Provide:
+
+- Environments.
+- Agent versions.
+- Deployment pipelines.
+- Release gates.
+- Canary status.
+- Rollback history.
+- Runtime configuration.
+- Health checks.
+
+## 45. Usage and Costs
+
+Provide:
+
+- Per-organization usage.
+- Per-workspace usage.
+- Per-agent usage.
+- Per-model usage.
+- Per-tool usage.
+- Token breakdown.
+- Execution breakdown.
+- Storage costs.
+- Infrastructure costs.
+- Budget alerts.
+- Forecasts.
+
+---
+
+# PART XI: COMMERCIALIZATION
+
+## 46. Product business model
+
+Build a SaaS platform with usage-based infrastructure consumption.
+
+Support:
+
+### Community
+- Limited agent capacity.
+- Basic agent registry.
+- Local experimentation.
+- Sandbox executions.
+- Basic usage information.
+
+### Builder
+- More agents.
+- Model connections.
+- Agent Studio.
+- Workflow orchestration.
+- Version management.
+- Evaluation tools.
+- Developer APIs.
+
+### Team
+- Shared workspaces.
+- Team roles.
+- Agent fleets.
+- Advanced integrations.
+- Approval workflows.
+- Execution observability.
+- Usage controls.
+
+### Enterprise
+- SSO.
+- SCIM.
+- Advanced governance.
+- Dedicated runtime pools.
+- Private deployments.
+- Custom policies.
+- Audit retention.
+- Enterprise support.
+- Custom contractual SLA options.
+
+## 47. Metering
+
+Implement transparent consumption-based billing.
+
+Meter separately:
+
+- Seats.
+- Active agents.
+- Workflow executions.
+- Runtime compute.
+- Tool invocations where applicable.
+- Telemetry retention.
+- Memory and storage.
+- Advanced evaluation usage.
+
+Support customer-controlled limits.
+
+Implement:
+- Billing previews.
+- Usage warnings.
+- Spending caps.
+- Monthly invoices.
+- Payment failure handling.
+- Subscription changes.
+- Usage exports.
+- Enterprise contracts.
+
+Use idempotent usage events and immutable billing records.
+
+## 48. Developer ecosystem
+
+Create:
+
+- TypeScript SDK.
+- Python SDK.
+- CLI.
+- REST API.
+- Webhook API.
+- MCP integration documentation.
+- API reference.
+- Tutorials.
+- Example repositories.
+- Local sandbox.
+- Starter templates.
+
+Build a plugin architecture for custom agent frameworks and provider adapters.
+
+## 49. Agent and integration marketplace
+
+Build a marketplace after the core trust model is implemented.
+
+Potential offerings:
+
+- Prebuilt agents.
+- Industry workflows.
+- Agent templates.
+- MCP integrations.
+- Tool adapters.
+- Evaluation suites.
+- Governance policies.
+- Deployment templates.
+
+Marketplace listings must display:
+
+- Publisher.
+- Version.
+- Permissions.
+- Capabilities.
+- Required credentials.
+- Data access.
+- Risk category.
+- Compatibility.
+- Verified evaluation evidence.
+
+Never allow marketplace agents to inherit broad permissions automatically.
+
+Future monetization:
+- Paid templates.
+- Paid integrations.
+- Enterprise workflow packs.
+- Publisher revenue sharing.
+- Premium model-routing modules.
+
+---
+
+# PART XII: RELIABILITY AND FAILURE MANAGEMENT
+
+## 50. Execution reliability
+
+Implement:
+
+- Durable workflow state.
+- Checkpointing.
+- Idempotency.
+- Classified retries.
+- Exponential backoff with jitter.
+- Dead-letter queues.
+- Circuit breakers.
+- Timeouts.
+- Cancellation.
+- Concurrency limits.
+- Execution budgets.
+- Backpressure.
+- Worker recovery.
+
+Never retry a non-idempotent external operation without determining whether it already occurred.
+
+## 51. Agent-specific failure scenarios
+
+Test:
+
+- Agent infinite loops.
+- Recursive delegation.
+- Malformed agent messages.
+- Context overflow.
+- Model timeout.
+- Provider outage.
+- Tool failure.
+- Memory poisoning.
+- Duplicate execution.
+- Stale memory.
+- Missing model.
+- Invalid credentials.
+- Expired secrets.
+- Permission escalation.
+- Cross-tenant access.
+- Resource starvation.
+- Runaway spending.
+- Prompt injection.
+- Unbounded parallel workflows.
+- Inconsistent tool outputs.
+- Lost approval callbacks.
+
+## 52. Recovery
+
+Provide:
+
+- Failed execution inspection.
+- Safe checkpoint recovery.
+- Controlled replay.
+- Agent restart.
+- Agent pause.
+- Version rollback.
+- Tool suspension.
+- Provider failover.
+- Workspace emergency stop.
+- Human escalation.
+
+A replay must be distinguishable from a fresh execution and must not accidentally repeat external side effects.
+
+---
+
+# PART XIII: TESTING AND SECURITY ASSURANCE
+
+## 53. Testing layers
+
+Implement:
+
+1. Unit tests.
+2. API tests.
+3. Database tests.
+4. Workflow integration tests.
+5. Runtime integration tests.
+6. Provider tests.
+7. Multi-tenant isolation tests.
+8. Agent communication tests.
+9. Evaluation regression tests.
+10. Adversarial tests.
+11. Load tests.
+12. Chaos tests.
+13. End-to-end product tests.
+
+## 54. Required abuse and security tests
+
+Test:
+
+- Unauthorized agent access.
+- Unauthorized tool access.
+- Forged agent identity.
+- Forged approval.
+- Prompt injection through tool output.
+- Malicious MCP metadata.
+- Secret exposure.
+- Cross-tenant memory access.
+- Cross-tenant data access.
+- Privilege escalation.
+- Data exfiltration.
+- Replay attacks.
+- Excessive execution.
+- Runaway token consumption.
+- Malicious dependency.
+- Compromised plugin.
+- Malicious agent package.
+
+## 55. Acceptance requirements
+
+Every feature must have tests proving:
+
+- Expected behavior.
+- Permission boundaries.
+- Invalid input handling.
+- Failure handling.
+- Resource cleanup.
+- Audit generation.
+- Usage attribution.
+
+No placeholder implementation may be represented as a functional production integration.
+
+---
+
+# PART XIV: DEPLOYMENT AND RELEASE
+
+## 56. Environment structure
+
+Maintain:
+
+- Local.
+- Development.
+- Testing.
+- Staging.
+- Production.
+
+Implement infrastructure-as-code and automated deployments.
+
+Release gates must include:
+
+- Build.
+- Type checking.
+- Linting.
+- Unit tests.
+- Integration tests.
+- Security scanning.
+- Dependency verification.
+- Database migration checks.
+- Staging validation.
+- Approval.
+
+Support rolling and canary releases.
+
+Do not assume database migrations can always be rolled backwards. Use compatible schema evolution and forward-recovery plans.
+
+## 57. Initial reliability objectives
+
+Establish measurable internal targets:
+
+- 99.9% control-plane monthly availability.
+- 99.9% accepted workflow scheduling availability.
+- No silent loss of durable execution state.
+- Complete execution correlation across agent handoffs.
+- Reliable tenant authorization.
+- Controlled execution budgets.
+- Verifiable recovery from worker termination.
+
+These are future engineering objectives, not claims about existing performance.
+
+Document RPO, RTO, recovery regions, backup restoration and operational ownership before selling availability commitments.
+
+---
+
+# PART XV: IMPLEMENTATION ROADMAP
+
+## PHASE 0: Discovery and architecture
+
+- Repository audit.
+- Technical gap analysis.
+- Product requirements.
+- Brand migration plan.
+- Design system specification.
+- Threat modelling.
+- Target architecture.
+- Engineering backlog.
+
+## PHASE 1: Core platform
+
+- Organization management.
+- Authentication.
+- Workspaces.
+- Agent registry.
+- Agent manifests.
+- Versioning.
+- Model gateway foundations.
+- Tool registry foundations.
+- Basic dashboards.
+
+## PHASE 2: Runtime and orchestration
+
+- Isolated runtime.
+- Task scheduler.
+- Durable execution.
+- Workflow engine.
+- Agent communication.
+- Checkpointing.
+- Cancellation.
+- Resource quotas.
+- Execution explorer.
+
+## PHASE 3: Governance and security
+
+- Agent identities.
+- RBAC and ABAC.
+- Policies.
+- Human approvals.
+- Secrets brokerage.
+- Autonomy settings.
+- Audit history.
+- Security Center.
+- Emergency controls.
+
+## PHASE 4: Intelligence and evaluation
+
+- Memory services.
+- Prompt registry.
+- Evaluation Lab.
+- Model comparisons.
+- Regression testing.
+- Model routing.
+- Context management.
+- Cost optimization.
+
+## PHASE 5: Complete enterprise product
+
+- Fleet management.
+- Agent Studio.
+- Integration catalogue.
+- Deployment Center.
+- Multi-environment promotion.
+- SSO and SCIM.
+- Audit exports.
+- Enterprise configurations.
+
+## PHASE 6: Commercialization
+
+- Subscription engine.
+- Metering.
+- Usage analytics.
+- Billing.
+- Customer onboarding.
+- Pricing pages.
+- Developer portal.
+- Marketplace foundations.
+
+## PHASE 7: Infrastructure maturity
+
+- Load testing.
+- Chaos testing.
+- Multi-region recovery.
+- Advanced scaling.
+- Security assessment.
+- Independent penetration testing.
+- Operational readiness.
+- Customer pilots.
+
+---
+
+# PART XVI: MANDATORY DELIVERABLES
+
+Produce the following documentation and implementation artifacts.
+
+### Product documentation
+- `docs/product/PRODUCT_VISION.md`
+- `docs/product/PRD.md`
+- `docs/product/FEATURE_MATRIX.md`
+- `docs/product/USER_JOURNEYS.md`
+- `docs/product/INFORMATION_ARCHITECTURE.md`
+
+### Branding and design
+- `docs/brand/BRAND_GUIDELINES.md`
+- `docs/design/DESIGN_SYSTEM.md`
+- `docs/design/DESIGN_TOKENS.md`
+- `docs/design/COMPONENT_LIBRARY.md`
+- `docs/design/MOTION_SPECIFICATION.md`
+- `docs/design/ACCESSIBILITY.md`
+
+### Architecture
+- `docs/architecture/TARGET_ARCHITECTURE.md`
+- `docs/architecture/CONTROL_PLANE.md`
+- `docs/architecture/EXECUTION_PLANE.md`
+- `docs/architecture/INTELLIGENCE_PLANE.md`
+- `docs/architecture/SECURITY_MODEL.md`
+- `docs/architecture/DATA_MODEL.md`
+- `docs/architecture/EVENT_MODEL.md`
+- `docs/architecture/AGENT_PROTOCOL.md`
+
+### Engineering
+- `docs/engineering/IMPLEMENTATION_PLAN.md`
+- `docs/engineering/API_SPECIFICATION.md`
+- `docs/engineering/TEST_STRATEGY.md`
+- `docs/engineering/FAILURE_MODES.md`
+- `docs/engineering/RELIABILITY_TARGETS.md`
+- `docs/engineering/DEPLOYMENT_RUNBOOK.md`
+
+### Commercial
+- `docs/commercial/PRICING.md`
+- `docs/commercial/METERING.md`
+- `docs/commercial/BILLING_ARCHITECTURE.md`
+- `docs/commercial/ENTERPRISE_OFFERING.md`
+- `docs/commercial/GO_TO_MARKET.md`
+
+### Operations
+- `docs/operations/SECURITY_OPERATIONS.md`
+- `docs/operations/INCIDENT_RESPONSE.md`
+- `docs/operations/DISASTER_RECOVERY.md`
+- `docs/operations/PRODUCTION_READINESS.md`
+
+Documentation must reflect actual implementation status and outstanding work.
+
+---
+
+# PART XVII: FINAL DEFINITION OF DONE
+
+The platform is not complete because a dashboard looks impressive.
+
+The platform is complete when it can demonstrably:
+
+1. Register and manage agents.
+2. Deploy multiple agent frameworks.
+3. Coordinate multi-agent workflows.
+4. Enforce scoped identities and permissions.
+5. Isolate execution environments.
+6. Securely invoke external tools.
+7. Maintain durable execution state.
+8. Prevent unbounded delegation.
+9. Monitor every significant execution step.
+10. Evaluate agent quality and safety.
+11. Manage memory and data access.
+12. Control models and infrastructure spending.
+13. Version and roll back agents.
+14. Handle failures and provider outages.
+15. Enforce human approval requirements.
+16. Preserve audit evidence.
+17. Isolate customer organizations.
+18. Meter and bill product usage accurately.
+19. Recover from tested infrastructure failures.
+20. Support real customer deployments.
+
+For every major feature, provide implementation evidence, test evidence, operational requirements and remaining limitations.
+
+Never manufacture adoption, uptime, execution counts or evaluation scores.
+
+Never claim production deployment without verifying the deployed environment.
+
+Never make a policy or permission less restrictive to get a feature working.
+
+# FINAL PRODUCT OBJECTIVE
+
+Build AZIMARA MESH into the enterprise operating system for autonomous AI agent fleets.
+
+The long-term ambition is for it to become the trusted infrastructure layer that sits between AI models, autonomous agents, business systems and the people responsible for governing them.
+
+**Not another place to chat with agents. The place where organisations operate their entire agent ecosystem.**
