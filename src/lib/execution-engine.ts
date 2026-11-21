@@ -14,6 +14,7 @@ import { retrieveMemory, checkNamespaceAccess } from '@/lib/memory'
 import { recordUsage, checkWorkspaceBudget, checkAgentBudget, monthSpend } from '@/lib/metering'
 import { isDurableBudgetEnabled, reserveBudget, commitReservation, releaseReservation } from '@/lib/budget-reservation'
 import { runWithDatabaseContext } from '@/lib/db-context'
+import { temporalEnabled, startTemporalRun } from '@/temporal/client'
 import { randomUUID } from 'node:crypto'
 import { onPolicyDeny, onToolOutputScan, onExecutionComplete } from '@/lib/security-monitor'
 
@@ -138,8 +139,37 @@ export async function startAgentRun(input: StartRunInput): Promise<StartRunResul
     },
   })
 
+  // Optional Temporal dispatch: workflowId = executionId is the idempotency
+  // key. The in-process runner remains the default until a staged cutover.
+  if (temporalEnabled()) {
+    const started = await startTemporalRun({
+      executionId: execution.id,
+      agentId: agent.id,
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      input: input.input,
+    }).catch((err) => {
+      console.error('[execution-engine] temporal dispatch failed', execution.id, err)
+      return null
+    })
+    if (started) {
+      await audit({
+        organizationId: (await db.workspace.findUnique({ where: { id: input.workspaceId } }))?.organizationId ?? '',
+        workspaceId: input.workspaceId,
+        actorId: input.userId ?? identity.id,
+        actorName: input.userName ?? `workload:${agent.slug}`,
+        action: 'execution.dispatch_temporal',
+        resourceType: 'execution', resourceId: execution.id, severity: 'info',
+        detail: { workflowId: started.workflowId, trigger: input.trigger ?? 'manual' },
+      })
+      return { ok: true, executionId: execution.id }
+    }
+    // Dispatch failed: fall back to the in-process runner below, leaving the
+    // reserved budget intact rather than dropping the work.
+  }
+
   // Fire the async runner inside an isolated tenant context so background
-  // database work carries RLS claims (worker threads will own this in WS2).
+  // database work carries RLS claims.
   void runWithDatabaseContext(
     { userId: input.userId, workspaceId: input.workspaceId },
     () => runAgentExecution(execution.id, agent.id, input),

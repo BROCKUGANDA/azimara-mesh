@@ -1,0 +1,147 @@
+openapi: 3.1.0
+info:
+  title: Azimara Mesh API
+  version: "1.0.0"
+  description: Versioned public control-plane API. API-key authenticated and tenant-scoped.
+servers:
+  - url: https://mesh.aiazimara.com/api/v1
+security:
+  - BearerApiKey: []
+paths:
+  /agents:
+    get:
+      operationId: listAgents
+      summary: List agents in the authenticated workspace
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Paginated agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Agent" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /executions:
+    get:
+      operationId: listExecutions
+      summary: List executions in the authenticated workspace
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Paginated executions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Execution" }
+                  pagination: { $ref: "#/components/schemas/Pagination" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: startExecution
+      summary: Start an agent execution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agentId]
+              properties:
+                agentId: { type: string }
+                input: { type: object, additionalProperties: true }
+      responses:
+        "202":
+          description: Execution accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string, enum: [queued] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /executions/{id}/cancel:
+    post:
+      operationId: cancelExecution
+      summary: Cancel a running execution
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Execution cancelled
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+components:
+  securitySchemes:
+    BearerApiKey:
+      type: http
+      scheme: bearer
+      description: An `azm_` API key created in the Developer Portal.
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+  schemas:
+    Agent:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        status: { type: string }
+        currentVersion: { type: string }
+    Execution:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string }
+        kind: { type: string }
+        startedAt: { type: string, format: date-time }
+    Pagination:
+      type: object
+      properties:
+        hasMore: { type: boolean }
+        nextCursor: { type: string, nullable: true }
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key
+    Forbidden:
+      description: Insufficient scope
+    BadRequest:
+      description: Invalid request
+    NotFound:
+      description: Resource not found
+    Conflict:
+      description: Resource in an invalid state

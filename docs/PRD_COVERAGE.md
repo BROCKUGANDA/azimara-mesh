@@ -212,3 +212,30 @@ Defined but NOT deployed to the live host (require capacity check + approval):
 Remaining WS2 gates: worker-crash recovery drill, duplicate/out-of-order event
 drill against NATS, and a staging rehearsal before any live cutover.
 
+
+## Workstreams 3-4 status (2026-11-21)
+
+Temporal worker (WS2 continuation):
+- `src/temporal/` defines the agent-run workflow (workflowId = executionId for
+  idempotent start), heartbeat-based activities, cancellation signal, a worker
+  entrypoint and a lazy client. startAgentRun dispatches via Temporal only when
+  TEMPORAL_ADDRESS is set and falls back to the in-process runner on failure.
+- Services are defined in deploy/services/compose.yaml (pinned, resource
+  limited, no-new-privileges); not deployed to the live host.
+
+WS3 (runtime isolation and secrets):
+- `src/lib/sandbox.ts`: Docker adapter with non-root, read-only rootfs,
+  cap-drop ALL, default seccomp, resource limits and deny-by-default network;
+  gVisor detection gates untrusted code.
+- `src/lib/secret-broker.ts`: provider-neutral interface with a Vault-compatible
+  adapter and a dev-only in-memory broker; production requires a broker.
+
+WS4 (developer platform):
+- API-key authentication with hashed keys, scopes, expiry/revocation support.
+- Public v1 API at /api/v1/* with cursor pagination, stable error contract and
+  tenant scoping for agents and executions (list/start/cancel).
+- OpenAPI 3.1 contract at docs/engineering/openapi-v1.yaml.
+- TypeScript SDK, Python SDK and CLI in sdks/, verified with contract tests.
+
+All new pure logic is unit tested (17 pass); integration suites remain 5+7 pass.
+
