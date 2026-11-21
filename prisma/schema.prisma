@@ -573,6 +573,7 @@ model Approval {
   riskClass     String   @default("high")
   status        String   @default("pending") // pending | approved | rejected | expired
   reviewerRole  String   @default("admin")
+  quorum        Int      @default(1)
   decidedBy     String?
   decisionNote  String?
   decidedAt     DateTime?
@@ -580,6 +581,17 @@ model Approval {
   createdAt     DateTime @default(now())
   @@index([workspaceId])
   @@index([status])
+}
+
+model ApprovalDecision {
+  id         String   @id @default(cuid())
+  approvalId String
+  userId     String
+  decision   String   // approve | reject
+  note       String?
+  decidedAt  DateTime @default(now())
+  @@unique([approvalId, userId])
+  @@index([approvalId])
 }
 
 model AuditEvent {

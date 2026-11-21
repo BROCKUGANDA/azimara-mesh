@@ -8,6 +8,10 @@ import { buildDockerArgs, DEFAULT_LIMITS, untrustedCodeAllowed } from '../src/li
 import { DevSecretBroker, setSecretBroker } from '../src/lib/secret-broker'
 import { hashKey, hasScope, type ApiKeyPrincipal } from '../src/lib/api-key-auth'
 import { MeshClient, MeshError } from '../sdks/typescript/src/index'
+import { FakeBillingProvider, hasEntitlement, setBillingProvider } from '../src/lib/billing-provider'
+import { spanAttributes, telemetryEnabled } from '../src/lib/telemetry'
+import { oidcConfigured } from '../src/lib/oidc'
+import { validatePackageManifest, marketplaceEnabled, type PackageManifest } from '../src/lib/marketplace-trust'
 
 describe('JSON column helpers', () => {
   test('round-trips structured values', () => {
@@ -85,6 +89,68 @@ describe('typescript SDK', () => {
       expect(err).toBeInstanceOf(MeshError)
       expect((err as MeshError).code).toBe('FORBIDDEN')
     }
+  })
+})
+
+describe('marketplace trust', () => {
+  const base: PackageManifest = {
+    name: 'good-package', version: '1.0.0', publisherId: 'pub1',
+    publisherVerified: true, signature: 'a'.repeat(64), sourceHash: 'b'.repeat(32),
+    permissions: { tools: ['web-search'], network: 'restricted', filesystem: 'none' },
+    pinnedDependencies: { lodash: '4.17.21' },
+  }
+
+  test('accepts a complete signed manifest', () => {
+    expect(validatePackageManifest(base).ok).toBe(true)
+  })
+
+  test('rejects unsafe or unverified packages', () => {
+    const bad = validatePackageManifest({
+      ...base, publisherVerified: false, signature: '',
+      permissions: { ...base.permissions, shell: true, network: 'unrestricted', filesystem: 'host' },
+      pinnedDependencies: { lodash: '^4.0.0' },
+    })
+    expect(bad.ok).toBe(false)
+    expect(bad.reasons.join(' ')).toContain('publisher')
+    expect(bad.reasons.join(' ')).toContain('shell')
+    expect(bad.reasons.join(' ')).toContain('pinned')
+  })
+
+  test('marketplace stays off until review and scanning are configured', () => {
+    delete process.env.ENABLE_MARKETPLACE
+    expect(marketplaceEnabled()).toBe(false)
+  })
+})
+
+describe('billing entitlements', () => {
+  test('active subscription grants paid features; free features always available', async () => {
+    const billing = new FakeBillingProvider()
+    billing.set({ workspaceId: 'ws1', status: 'active', planSlug: 'team', seats: 5 })
+    setBillingProvider(billing)
+    expect(await hasEntitlement('ws1', 'sso')).toBe(true)
+    expect(await hasEntitlement('ws2', 'sandbox:run')).toBe(true)
+    expect(await hasEntitlement('ws2', 'sso')).toBe(false)
+    setBillingProvider(null)
+  })
+})
+
+describe('telemetry and identity config', () => {
+  test('span attributes carry only correlation ids', () => {
+    const attrs = spanAttributes({
+      workspaceId: 'ws1', executionId: 'e1', correlationId: 'c1',
+    })
+    expect(attrs).toEqual({ 'mesh.workspaceId': 'ws1', 'mesh.executionId': 'e1', 'mesh.correlationId': 'c1' })
+  })
+
+  test('optional adapters are disabled without configuration', () => {
+    const prevOtel = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+    const prevIssuer = process.env.OIDC_ISSUER
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+    delete process.env.OIDC_ISSUER
+    expect(telemetryEnabled()).toBe(false)
+    expect(oidcConfigured()).toBe(false)
+    if (prevOtel !== undefined) process.env.OTEL_EXPORTER_OTLP_ENDPOINT = prevOtel
+    if (prevIssuer !== undefined) process.env.OIDC_ISSUER = prevIssuer
   })
 })
 

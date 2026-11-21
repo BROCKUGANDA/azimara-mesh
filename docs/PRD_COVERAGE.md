@@ -239,3 +239,40 @@ WS4 (developer platform):
 
 All new pure logic is unit tested (17 pass); integration suites remain 5+7 pass.
 
+
+## Workstreams 5-8 status (2026-11-21)
+
+WS5 (enterprise governance):
+- OIDC ID-token verification via JWKS discovery (src/lib/oidc.ts); opt-in via
+  OIDC_ISSUER/OIDC_CLIENT_ID. Verified identities map to existing users; no
+  implicit owner grant.
+- SCIM 2.0 Users resource at /api/scim/v2/Users with a dedicated bearer token;
+  provisions users as viewers only.
+- ABAC is supported by the existing policy engine's metadata dotted-path rules.
+- Approval quorum: Approval.quorum + ApprovalDecision table; any rejection
+  vetoes, approval finalises when distinct approvers reach quorum.
+
+WS6 (billing):
+- Billing-provider abstraction with Stripe test-mode adapter (live disabled
+  unless STRIPE_LIVE_MODE=1) and a fake provider for dev/CI.
+- Signed webhook receiver at /api/billing/webhook with provider-event
+  idempotency. Entitlement helper distinguishes free vs paid features.
+
+WS7 (observability):
+- Optional OpenTelemetry instrumentation (src/lib/telemetry.ts) with correlation
+  attributes only (no raw payloads).
+- Emergency health endpoint GET /api/health independent of Temporal/NATS/
+  telemetry. SLO targets and evidence gates in SLO_AND_OBSERVABILITY.md.
+
+WS8 (ecosystem):
+- Marketplace trust gate (src/lib/marketplace-trust.ts): verified publisher,
+  signature, source hash, exact version/dependency pinning, scoped permissions,
+  no shell/host filesystem/unrestricted egress. Marketplace stays disabled
+  until review and SBOM scanning are configured.
+- Multi-region remains explicitly gated (docs/operations/MULTI_REGION_GATE.md).
+- Backup/restore drill script for PostgreSQL added (scripts/backup-restore-drill.sh);
+  it restores to a disposable database and verifies counts. Not yet executed
+  against production data.
+
+Unit tests now 23 passing; integration suites 5 + 7 passing.
+
