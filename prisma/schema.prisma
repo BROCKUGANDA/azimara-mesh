@@ -761,3 +761,53 @@ model Notification {
   createdAt   DateTime @default(now())
   @@index([workspaceId])
 }
+
+// ---------------------------------------------------------------------------
+// Durable consistency (Workstream 2)
+// ---------------------------------------------------------------------------
+
+model OutboxEvent {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  eventId        String    @unique
+  eventType      String
+  schemaVersion  Int       @default(1)
+  aggregateType  String
+  aggregateId    String
+  correlationId  String    @default("")
+  causationId    String?
+  payloadJson    String    @default("{}")
+  occurredAt     DateTime  @default(now())
+  publishedAt    DateTime?
+  attempts       Int       @default(0)
+  lastError      String?
+  @@index([workspaceId, publishedAt])
+  @@index([eventType])
+}
+
+model InboxMessage {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  messageId     String    @unique
+  eventType     String
+  payloadJson   String    @default("{}")
+  receivedAt    DateTime  @default(now())
+  processedAt   DateTime?
+  attempts      Int       @default(0)
+  lastError     String?
+  @@index([workspaceId, processedAt])
+}
+
+model BudgetReservation {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  agentId        String?
+  executionId    String
+  idempotencyKey String    @unique
+  amountUsd      Float
+  status         String    @default("reserved") // reserved | committed | released
+  createdAt      DateTime  @default(now())
+  settledAt      DateTime?
+  @@index([workspaceId, status])
+  @@index([executionId])
+}

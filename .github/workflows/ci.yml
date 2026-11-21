@@ -78,6 +78,9 @@ jobs:
       - name: Tenant isolation integration tests
         run: bun run test:postgres
 
+      - name: Durable consistency integration tests
+        run: bun run test:durability
+
       - name: Secret scan
         run: bun run security:scan
 

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test tests/unit.test.ts",
     "test:postgres": "bun test tests/postgres-tenant.test.ts",
+    "test:durability": "bun test tests/durable-consistency.test.ts",
     "security:scan": "node scripts/secret-scan.mjs",
     "db:generate": "prisma generate",
     "db:migrate:dev": "prisma migrate dev",

@@ -12,6 +12,9 @@ import { routeModel, invokeModel } from '@/lib/model-gateway'
 import { executeToolCall, redactSecrets } from '@/lib/tool-runtime'
 import { retrieveMemory, checkNamespaceAccess } from '@/lib/memory'
 import { recordUsage, checkWorkspaceBudget, checkAgentBudget, monthSpend } from '@/lib/metering'
+import { isDurableBudgetEnabled, reserveBudget, commitReservation, releaseReservation } from '@/lib/budget-reservation'
+import { runWithDatabaseContext } from '@/lib/db-context'
+import { randomUUID } from 'node:crypto'
 import { onPolicyDeny, onToolOutputScan, onExecutionComplete } from '@/lib/security-monitor'
 
 const DEFAULT_LIMITS = { maxSteps: 12, timeoutMs: 120_000, maxCostUsd: 1.5, maxDelegationDepth: 2, maxIterations: 3 }
@@ -70,7 +73,32 @@ export async function startAgentRun(input: StartRunInput): Promise<StartRunResul
     return { ok: false, code: 'BUDGET_EXCEEDED', error: agentBudget.reason }
   }
 
-  const limits = { ...DEFAULT_LIMITS, ...jparse<{ maxSteps?: number; timeoutMs?: number; maxCostUsd?: number; maxDelegationDepth?: number }>(agent.resourceLimitsJson, {}) }
+  const limits = { ...DEFAULT_LIMITS, ...jparse<{ maxSteps?: number; timeoutMs?: number; maxCostUsd?: number; maxDelegationDepth?: number; monthlyBudget?: number }>(agent.resourceLimitsJson, {}) }
+
+  // Atomic reservation closes the concurrent-start budget TOCTOU on Postgres.
+  // SQLite deployments keep the legacy best-effort checks above.
+  let reservationKey: string | undefined
+  if (isDurableBudgetEnabled()) {
+    reservationKey = `res_${randomUUID()}`
+    const reservation = await reserveBudget({
+      workspaceId: input.workspaceId,
+      agentId: agent.id,
+      executionId: reservationKey,
+      idempotencyKey: reservationKey,
+      amountUsd: limits.maxCostUsd,
+      workspaceCapUsd: wsBudget.cap,
+      agentCapUsd: limits.monthlyBudget,
+    })
+    if (!reservation.ok) {
+      await audit({
+        organizationId: (await db.workspace.findUnique({ where: { id: input.workspaceId } }))?.organizationId ?? '',
+        workspaceId: input.workspaceId, actorType: 'system', action: 'execution.blocked_budget',
+        resourceType: 'agent', resourceId: agent.id, severity: 'warning', detail: { reason: reservation.reason },
+      })
+      return { ok: false, code: 'BUDGET_EXCEEDED', error: reservation.reason ?? 'Budget reservation failed' }
+    }
+  }
+
   const correlationId = input.correlationId ?? newCorrelationId()
   const depth = input.delegationDepth ?? 0
   if (depth > limits.maxDelegationDepth) {
@@ -105,14 +133,19 @@ export async function startAgentRun(input: StartRunInput): Promise<StartRunResul
       status: 'queued',
       inputJson: JSON.stringify(input.input ?? {}),
       identitySubject: identity.id,
-      budgetCapsJson: JSON.stringify({ maxSteps: limits.maxSteps, timeoutMs: limits.timeoutMs, maxCostUsd: limits.maxCostUsd, maxDelegationDepth: limits.maxDelegationDepth }),
+      budgetCapsJson: JSON.stringify({ maxSteps: limits.maxSteps, timeoutMs: limits.timeoutMs, maxCostUsd: limits.maxCostUsd, maxDelegationDepth: limits.maxDelegationDepth, reservationKey }),
       isReplay: input.isReplay ?? false,
     },
   })
 
-  // fire the async runner (in-process worker; state is checkpointed after every step)
-  void runAgentExecution(execution.id, agent.id, input).catch(async (err) => {
+  // Fire the async runner inside an isolated tenant context so background
+  // database work carries RLS claims (worker threads will own this in WS2).
+  void runWithDatabaseContext(
+    { userId: input.userId, workspaceId: input.workspaceId },
+    () => runAgentExecution(execution.id, agent.id, input),
+  ).catch(async (err) => {
     console.error('[execution-engine] runner crashed', execution.id, err)
+    if (reservationKey) await releaseReservation(reservationKey).catch(() => undefined)
     await db.execution.update({
       where: { id: execution.id },
       data: { status: 'failed', finishedAt: new Date(), error: `runner crashed: ${err instanceof Error ? err.message : String(err)}` },
@@ -183,7 +216,8 @@ export async function runAgentExecution(executionId: string, agentId: string, in
   const workspace = await db.workspace.findUnique({ where: { id: agent.workspaceId } })
   if (!workspace) return
 
-  const caps = jparse<{ maxSteps: number; timeoutMs: number; maxCostUsd: number; maxDelegationDepth: number }>(exec.budgetCapsJson, DEFAULT_LIMITS)
+  const caps = jparse<{ maxSteps: number; timeoutMs: number; maxCostUsd: number; maxDelegationDepth: number; reservationKey?: string }>(exec.budgetCapsJson, DEFAULT_LIMITS)
+  const reservationKey = caps.reservationKey
   const limits = { ...DEFAULT_LIMITS, ...jparse<{ maxIterations?: number }>(agent.resourceLimitsJson, {}) }
   const dataClass = workspace.dataClassification
   const environment = envForAgent(workspace.dataClassification)
@@ -463,7 +497,12 @@ export async function runAgentExecution(executionId: string, agentId: string, in
         checkpointJson: JSON.stringify({ phase: 'completed' }),
       },
     })
-    if (finalized.count !== 1) return // terminal state changed while running
+    if (finalized.count !== 1) {
+      // A cancellation won the race; release the unspent reservation.
+      if (reservationKey) await releaseReservation(reservationKey).catch(() => undefined)
+      return
+    }
+    if (reservationKey) await commitReservation(reservationKey).catch(() => undefined)
     await recordUsage({
       workspaceId: agent.workspaceId, kind: 'execution', quantity: 1, unitCostUsd: 0.01,
       agentId: agent.id, executionId, idempotencyKey: `${executionId}:execution`,
@@ -506,7 +545,12 @@ export async function runAgentExecution(executionId: string, agentId: string, in
       },
     })
     // A terminal state (e.g. operator cancellation) already won the race.
-    if (failed.count !== 1) return
+    if (failed.count !== 1) {
+      if (reservationKey) await releaseReservation(reservationKey).catch(() => undefined)
+      return
+    }
+    // Failure/cancellation never keeps a held reservation.
+    if (reservationKey) await releaseReservation(reservationKey).catch(() => undefined)
     if (isAbort && message === 'cancelled') {
       await audit({
         organizationId: workspace.organizationId, workspaceId: agent.workspaceId,
