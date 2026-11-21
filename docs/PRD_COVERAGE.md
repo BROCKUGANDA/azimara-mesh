@@ -276,3 +276,27 @@ WS8 (ecosystem):
 
 Unit tests now 23 passing; integration suites 5 + 7 passing.
 
+
+## Onchain billing rewrite (2026-11-21)
+
+Stripe/card billing was removed entirely and replaced with a Solana SPL USDC rail:
+
+- `src/lib/billing-provider.ts`: pure JSON-RPC verification of finalized
+  transactions (no native Solana SDK, no card processor). Devnet default,
+  mainnet explicit. Verified payments become idempotent credit entries.
+- Prisma models/migration: OnchainPayment (unique signature), CreditLedgerEntry
+  (unique workspace/kind/reference), UsageSettlement (unique period).
+- `POST /api/billing/payments` verifies a signature and credits once;
+  `GET` exposes cluster/treasury/credits/ledger.
+- `recordUsage()` draws billable usage down from credits by a derived
+  idempotency reference; `settleUsagePeriod()` records pay-per-use remainder.
+- Entitlements derive from verified credits / onchain-activated plan / explicit
+  pay-per-use, never card status.
+- Billing view now shows rail, USDC balance, settlements, and a signature
+  verifier. Stripe webhook route removed.
+- Tests: 3 unit verification tests + 4 Postgres integration tests (idempotent
+  payment, idempotent drawdown, settlement remainder, credit-based entitlements).
+  All pass against disposable Postgres.
+
+External gates remain: funded treasury ATA, mainnet opt-in, legal/tax review.
+

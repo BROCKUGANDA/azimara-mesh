@@ -823,3 +823,50 @@ model BudgetReservation {
   @@index([workspaceId, status])
   @@index([executionId])
 }
+
+// ---------------------------------------------------------------------------
+// Onchain billing (Solana SPL USDC)
+// ---------------------------------------------------------------------------
+
+model OnchainPayment {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  signature     String    @unique
+  payer         String
+  amountUsd     Float
+  mint          String
+  cluster       String
+  destination   String
+  status        String    @default("confirmed") // confirmed | settled | refunded
+  confirmedAt   DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model CreditLedgerEntry {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  amountUsd      Float    // signed: + topup, - usage drawdown
+  kind           String   // topup | usage | settlement_credit | adjustment
+  reference      String   // payment signature or settlement id
+  balanceAfterUsd Float
+  createdAt      DateTime @default(now())
+  @@unique([workspaceId, kind, reference])
+  @@index([workspaceId, createdAt])
+}
+
+model UsageSettlement {
+  id                String   @id @default(cuid())
+  workspaceId       String
+  periodStart       DateTime
+  periodEnd         DateTime
+  usageUsd          Float
+  creditsAppliedUsd Float
+  remainingUsd      Float
+  status            String   @default("pending") // pending | settled | written_off
+  onchainSignature  String?
+  createdAt         DateTime @default(now())
+  @@unique([workspaceId, periodStart])
+  @@index([workspaceId, status])
+}

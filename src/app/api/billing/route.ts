@@ -3,6 +3,10 @@ import { db } from '@/lib/db'
 import { apiContext, withApi, readJson, badRequest } from '@/lib/api-utils'
 import { audit } from '@/lib/audit'
 import { usageBreakdown } from '@/lib/metering'
+import {
+  creditBalance, settleUsagePeriod, getOnchainConfig,
+  isOnchainBillingConfigured,
+} from '@/lib/billing-provider'
 
 export async function GET(req: NextRequest) {
   return withApi(async () => {
@@ -14,16 +18,26 @@ export async function GET(req: NextRequest) {
     ])
     const breakdown = await usageBreakdown(ctx.workspaceId)
     const seats = await db.membership.count({ where: { workspaceId: ctx.workspaceId } })
+    const config = isOnchainBillingConfigured() ? getOnchainConfig() : null
+    const settlements = await db.usageSettlement.findMany({
+      where: { workspaceId: ctx.workspaceId }, orderBy: { periodStart: 'desc' }, take: 12,
+    })
     return {
+      rails: { type: 'solana-usdc', cluster: config?.cluster ?? 'not-configured', treasuryWallet: config?.treasuryWallet ?? null, usdcMint: config?.usdcMint ?? null },
       plans: plans.map((p) => ({ ...p, features: JSON.parse(p.featuresJson) })),
       subscription: subscription ? {
         plan: subscription.plan.name, planSlug: subscription.plan.slug, priceMonth: subscription.plan.priceMonth,
         includedCredits: subscription.plan.includedCredits, maxAgents: subscription.plan.maxAgents, maxSeats: subscription.plan.maxSeats,
         status: subscription.status, seats, spendCapUsd: subscription.spendCapUsd,
-        paymentMethod: subscription.paymentMethod,
         currentPeriodStart: subscription.currentPeriodStart.toISOString(),
         currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
       } : null,
+      credits: { balanceUsd: await creditBalance(ctx.workspaceId) },
+      settlements: settlements.map((s) => ({
+        id: s.id, periodStart: s.periodStart.toISOString(), periodEnd: s.periodEnd.toISOString(),
+        usageUsd: s.usageUsd, creditsAppliedUsd: s.creditsAppliedUsd,
+        remainingUsd: s.remainingUsd, status: s.status, onchainSignature: s.onchainSignature,
+      })),
       invoices: invoices.map((i) => ({
         id: i.id, number: i.number, periodStart: i.periodStart.toISOString(), periodEnd: i.periodEnd.toISOString(),
         subtotalUsd: i.subtotalUsd, creditsUsd: i.creditsUsd, totalUsd: i.totalUsd, status: i.status,
@@ -60,6 +74,20 @@ export async function POST(req: NextRequest) {
       await db.workspace.update({ where: { id: ctx.workspaceId }, data: { monthlyBudget: body.spendCapUsd ?? 0 } })
       await audit({ organizationId: ctx.organizationId, workspaceId: ctx.workspaceId, actorId: ctx.userId, actorName: ctx.userName, action: 'billing.spend_cap', resourceType: 'subscription', resourceId: subscription.id, severity: 'notice', detail: { cap: body.spendCapUsd } })
       return { ok: true, spendCapUsd: body.spendCapUsd }
+    }
+
+    if (body.op === 'settle_usage') {
+      const end = new Date()
+      const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1))
+      const result = await settleUsagePeriod(ctx.workspaceId, start, end)
+      await audit({
+        organizationId: ctx.organizationId, workspaceId: ctx.workspaceId,
+        actorId: ctx.userId, actorName: ctx.userName,
+        action: 'billing.onchain_settlement', resourceType: 'settlement', resourceId: result.settlementId,
+        severity: 'notice',
+        detail: { usageUsd: result.usageUsd, creditsAppliedUsd: result.creditsAppliedUsd, remainingUsd: result.remainingUsd },
+      })
+      return { ok: true, ...result }
     }
 
     badRequest('Unknown operation')

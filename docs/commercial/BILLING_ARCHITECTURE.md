@@ -1,40 +1,57 @@
-# AZIMARA MESH — Billing Architecture
+# AZIMARA MESH — Billing Architecture (onchain)
+
+The card-processor rail has been removed. Value enters Mesh only through a
+verified Solana SPL USDC transfer to the configured treasury token account.
 
 ## Components
-1. **Subscription** (`Subscription`): plan, status (active | past_due | canceled),
-   seats, spendCapUsd, payment method reference, period window. One per workspace.
-2. **Metering pipeline**: engines/events → `UsageEvent` (idempotencyKey unique) →
-   aggregations (`usageBreakdown`) → budget enforcement (`checkWorkspaceBudget`,
-   `checkAgentBudget`).
-3. **Invoicing**: `buildMonthlyInvoice` → `Invoice` (number, period, linesJson,
-   subtotal, credits, total, status draft→open→paid|failed). Immutable once issued.
-4. **Controls UI** (Billing view): plan cards with switch (validated: agent count vs
-   target tier), spend-cap editor (also updates workspace cap → engine enforcement),
-   invoice table with line-item drill-down.
+
+1. **Payment rail** (`src/lib/billing-provider.ts`): Solana JSON-RPC verification
+   of finalized transactions. `verifyUsdcPayment(signature)` inspects parsed
+   SPL-token instructions, matches the treasury ATA and USDC mint, and returns
+   the payer and amount. Devnet is the default; mainnet is explicit opt-in.
+2. **Onchain payments** (`OnchainPayment`): one row per verified signature,
+   unique by signature. A duplicate submission cannot double-credit.
+3. **Credit ledger** (`CreditLedgerEntry`): append-only signed entries
+   (`+ topup`, `- usage`). Every entry stores the resulting balance and a unique
+   `(workspaceId, kind, reference)`, so retries are no-ops. Per-workspace
+   `pg_advisory_xact_lock` serializes concurrent payments and drawdowns.
+4. **Metering** (`UsageEvent`): idempotent, immutable usage events with full
+   tenant/agent/model/tool/execution attribution. Billable usage draws credits
+   down by the same idempotency key.
+5. **Settlement** (`UsageSettlement`): idempotent by `(workspaceId, periodStart)`.
+   Prepaid credits are applied first; the remainder is recorded as pending
+   pay-per-use liability with an optional onchain signature.
+6. **Entitlements**: derived from verified credits, an active plan activated by
+   an onchain payment, or explicit pay-per-use opt-in — never from card status.
 
 ## Flow
+
 ```
-engine event ──idempotent──▶ UsageEvent ──▶ budgets (deny/warn)
-                                    └──▶ month rollup ──▶ Invoice ──▶ (charging 🗺️)
-plan change ──▶ Subscription (+org.planTier) ──▶ audited
-spend cap  ──▶ Subscription.spendCapUsd + Workspace.monthlyBudget ──▶ audited
+USDC transfer → tx signature → verifyUsdcPayment(finalized RPC)
+    → OnchainPayment (unique) → +CreditLedgerEntry
+engine event → UsageEvent (unique key) → -CreditLedgerEntry (same key)
+    → usageBreakdown → settleUsagePeriod → Invoice → remaining onchain payable
 ```
 
-## Guarantees implemented
-- No double-billing under retries (unique idempotency keys; duplicate inserts are
-  swallowed by constraint and logged at debug only).
-- Credits never exceed subtotal (clamped in invoice build).
-- Every billing mutation is an audit event with before/after.
-- Payment method is a reference only — raw payment credentials never enter the
-  platform (they live with the payment provider; integration roadmap).
+## Guarantees
+
+- No double-billing under retries: unique usage keys, unique payment signatures,
+  unique ledger references; all writes are atomic in Postgres transactions.
+- Credit balance cannot go negative (lock + `min(balance, amount)`).
+- Every payment, settlement and plan change produces an audit event.
+- No raw wallet keys, seed phrases or card data ever enter the platform. The
+  treasury is a public address; only the HTTP RPC is used for verification.
 
 ## Failure handling
-- Payment failure → status past_due (roadmap dunning flow); metering continues,
-  launches may be gated by policy (status-based rule hook exists in the policy
-  context).
-- Invoice regeneration is append-only (new invoice, not mutation).
 
-## Enterprise
-Contract terms, custom credits, PO-based invoicing and purchase-order references are
-Enterprise-tier roadmap items; the data model already carries period windows and
-immutable lines to support them.
+- Unverifiable/failed/non-finalized transactions are rejected without crediting.
+- RPC timeout is bounded (8s) and never blocks unrelated requests.
+- Insufficient credits do not block safe cancellation or audit recording;
+  new work is gated by budgets and explicit pay-per-use opt-in.
+- Disputes/refunds are handled onchain and recorded as an adjustment entry.
+
+## External gates (not code)
+
+Live mainnet mode requires `SOLANA_CLUSTER=mainnet-beta`, a funded treasury ATA,
+an explicit operator opt-in, and a tested reconciliation process. Legal/privacy
+review of token payments and tax treatment is a separate human gate.

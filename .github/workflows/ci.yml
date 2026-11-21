@@ -81,6 +81,9 @@ jobs:
       - name: Durable consistency integration tests
         run: bun run test:durability
 
+      - name: Onchain billing integration tests
+        run: bun run test:billing
+
       - name: Secret scan
         run: bun run security:scan
 

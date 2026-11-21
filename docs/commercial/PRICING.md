@@ -1,42 +1,51 @@
-# AZIMARA MESH — Pricing
+# AZIMARA MESH — Pricing (USDC on Solana)
 
-Four tiers (implemented in `Plan` table + Billing view). Prices are the product
-surface; the demo org runs on Team.
+Four tiers are represented in the `Plan` table and Billing view. Tier prices are
+guidance for pilots, not validated market prices. All payments are made in SPL
+USDC on Solana; there is no card processor.
 
-## Community — $0
-- 5 agents · 2 seats · $5 included metered credits
-- Basic agent registry, sandbox executions, local experimentation, basic usage info
+## Community — free
+- 5 agents · 2 seats · small introductory credit grant
+- Registry, sandbox executions, local experimentation, basic usage view
 
-## Builder — $49/mo
+## Builder — $49/mo equivalent in USDC
 - 25 agents · 5 seats · $25 included credits
-- Agent Studio, workflow orchestration, version management, evaluation tools,
-  developer APIs
+- Agent Studio, workflows, versioning, evaluations, developer APIs
 
-## Team — $199/mo
+## Team — $199/mo equivalent in USDC
 - 100 agents · 20 seats · $100 included credits
-- Shared workspaces, team roles, agent fleets, advanced integrations,
-  approval workflows, execution observability, usage controls
+- Shared workspaces, roles, fleets, approvals, observability, usage controls
 
 ## Enterprise — custom
 - 1000 agents · 500 seats · negotiated credits
-- SSO (SAML/OIDC), SCIM, advanced governance, dedicated runtime pools, private
-  deployments, custom policies, audit retention, enterprise support, custom SLAs
+- OIDC/SCIM, advanced governance, dedicated pools, private deployments,
+  custom policies, audit retention, contractual support
 
-## Metered consumption (billed beyond credits)
-| Meter | Unit price (demo defaults) |
+## Prepaid credits and pay-per-use
+
+- Send USDC to the treasury and paste the finalized transaction signature in
+  the Billing view; the amount is credited exactly once.
+- Metered usage draws credits down immediately. When credits run out, the
+  remainder is recorded as a pending onchain settlement instead of being
+  silently forgiven.
+- Pay-per-use beyond credits requires `MESH_PAY_PER_USE=1` (explicit operator
+  opt-in) and is always audited.
+
+## Metered consumption
+| Meter | Unit price |
 |---|---|
-| Tokens in / out | per-provider per-Mtok pricing (registry metadata) |
-| Executions | $0.01 per run |
-| Tool invocations | $0.002 per call |
-| Memory reads | $0.0001 per read |
-| Eval cases | $0.001 per case |
+| Tokens in / out | provider registry per-Mtok |
+| Executions | $0.01 |
+| Tool invocations | $0.002 |
+| Memory reads | $0.0001 |
+| Eval cases | $0.001 |
 | Storage | $0.02 / GB-month |
 
 ## Guards
-- Spend caps (workspace + fleet + agent) hard-block launches; warnings at 90%.
-- Plan changes validate agent count against the target tier's maxAgents.
-- Overage requires explicit cap increases (audited `billing.spend_cap`).
+- Spend caps hard-block launches; warnings at 90%.
+- Plan changes validate the agent count against the target tier.
+- Credit balance is never negative; concurrent drawdowns are serialized.
 
 ## Positioning rules
-No availability/SLA percentages are published until measured (see
-RELIABILITY_TARGETS.md). Enterprise SLAs are contractual options, not marketing.
+No availability/SLA percentages are published until measured. Token payment
+tax/legal treatment requires independent review; see BILLING_ARCHITECTURE.md.

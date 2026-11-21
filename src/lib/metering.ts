@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db'
 import { jparse } from '@/lib/types'
+import { applyUsageToCredits } from '@/lib/billing-provider'
 
 export type UsageKind =
   | 'agent_active' | 'execution' | 'token_in' | 'token_out'
@@ -43,6 +44,13 @@ export async function recordUsage(input: UsageInput): Promise<void> {
     },
     update: {}, // already recorded — never mutate an immutable usage event
   })
+
+  // Onchain rail: billable usage draws down prepaid USDC credits. The ledger
+  // reference is derived from the same idempotency key, so a retried producer
+  // cannot double-charge the credit balance.
+  if (cost > 0) {
+    await applyUsageToCredits(input.workspaceId, cost, `usage:${input.idempotencyKey}`)
+  }
 }
 
 export function monthStart(now = new Date()): Date {
@@ -172,9 +180,9 @@ export async function usageBreakdown(workspaceId: string, now = new Date()): Pro
 
 function round2(n: number): number { return Math.round(n * 100) / 100 }
 
-/** Build the next invoice from metered usage minus plan credits. */
+/** Build an invoice from metered usage minus onchain credits already applied. */
 export async function buildMonthlyInvoice(workspaceId: string, periodStart: Date, periodEnd: Date): Promise<{
-  number: string; lines: { kind: string; quantity: number; cost: number }[]; subtotal: number; credits: number; total: number
+  number: string; lines: { kind: string; quantity: number; cost: number }[]; subtotal: number; credits: number; total: number; settlementId?: string; onchainSignature?: string | null
 } | null> {
   const events = await db.usageEvent.findMany({
     where: { workspaceId, recordedAt: { gte: periodStart, lt: periodEnd } },
@@ -188,10 +196,13 @@ export async function buildMonthlyInvoice(workspaceId: string, periodStart: Date
   }
   const lines = [...kindMap.entries()].map(([kind, v]) => ({ kind, quantity: Math.round(v.quantity * 100) / 100, cost: round2(v.cost) }))
   const subtotal = round2(lines.reduce((s, l) => s + l.cost, 0))
-  const subscription = await db.subscription.findUnique({ where: { workspaceId }, include: { plan: true } })
-  const credits = Math.min(subscription?.plan.includedCredits ?? 0, subtotal)
+  const settlement = await db.usageSettlement.findUnique({
+    where: { workspaceId_periodStart: { workspaceId, periodStart } },
+  })
+  const credits = round2(settlement?.creditsAppliedUsd ?? 0)
   return {
     number: `INV-${periodStart.getUTCFullYear()}${String(periodStart.getUTCMonth() + 1).padStart(2, '0')}-${workspaceId.slice(-6).toUpperCase()}`,
-    lines, subtotal, credits: round2(credits), total: round2(subtotal - credits),
+    lines, subtotal, credits, total: round2(subtotal - credits),
+    settlementId: settlement?.id, onchainSignature: settlement?.onchainSignature ?? null,
   }
 }

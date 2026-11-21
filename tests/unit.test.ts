@@ -8,7 +8,7 @@ import { buildDockerArgs, DEFAULT_LIMITS, untrustedCodeAllowed } from '../src/li
 import { DevSecretBroker, setSecretBroker } from '../src/lib/secret-broker'
 import { hashKey, hasScope, type ApiKeyPrincipal } from '../src/lib/api-key-auth'
 import { MeshClient, MeshError } from '../sdks/typescript/src/index'
-import { FakeBillingProvider, hasEntitlement, setBillingProvider } from '../src/lib/billing-provider'
+import { verifyUsdcPayment, USDC_MINTS, type OnchainConfig } from '../src/lib/billing-provider'
 import { spanAttributes, telemetryEnabled } from '../src/lib/telemetry'
 import { oidcConfigured } from '../src/lib/oidc'
 import { validatePackageManifest, marketplaceEnabled, type PackageManifest } from '../src/lib/marketplace-trust'
@@ -122,15 +122,67 @@ describe('marketplace trust', () => {
   })
 })
 
-describe('billing entitlements', () => {
-  test('active subscription grants paid features; free features always available', async () => {
-    const billing = new FakeBillingProvider()
-    billing.set({ workspaceId: 'ws1', status: 'active', planSlug: 'team', seats: 5 })
-    setBillingProvider(billing)
-    expect(await hasEntitlement('ws1', 'sso')).toBe(true)
-    expect(await hasEntitlement('ws2', 'sandbox:run')).toBe(true)
-    expect(await hasEntitlement('ws2', 'sso')).toBe(false)
-    setBillingProvider(null)
+describe('onchain payment verification', () => {
+  const config: OnchainConfig = {
+    cluster: 'devnet',
+    rpcUrl: 'https://rpc.test',
+    treasuryWallet: 'TreasuryWallet1111111111111111111111111',
+    treasuryAta: 'TreasuryAta11111111111111111111111111111',
+    usdcMint: USDC_MINTS.devnet,
+  }
+  const sig = '5'.repeat(64)
+
+  function rpcResult(options: { destination?: string; error?: unknown } = {}) {
+    const tx = {
+      meta: { err: options.error ?? null },
+      blockTime: 1700000000,
+      transaction: {
+        message: {
+          accountKeys: [{ pubkey: 'PayerWallet111111111111111111111111' }],
+          instructions: [{
+            program: 'spl-token',
+            parsed: {
+              type: 'transfer',
+              info: { destination: options.destination ?? config.treasuryAta, tokenAmount: { uiAmount: 25.5 } },
+            },
+          }],
+        },
+      },
+    }
+    return { jsonrpc: '2.0', id: 1, result: tx }
+  }
+
+  const fakeFetch = (payload: unknown) => (async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+  test('extracts USDC amount and payer from a finalized transfer', async () => {
+    const original = globalThis.fetch
+    globalThis.fetch = fakeFetch(rpcResult())
+    try {
+      const payment = await verifyUsdcPayment(sig, config)
+      expect(payment?.amountUsd).toBe(25.5)
+      expect(payment?.destination).toBe(config.treasuryAta)
+      expect(payment?.cluster).toBe('devnet')
+    } finally { globalThis.fetch = original }
+  })
+
+  test('rejects failed transactions and wrong destinations', async () => {
+    const original = globalThis.fetch
+    try {
+      globalThis.fetch = fakeFetch(rpcResult({ error: 'insufficient funds' }))
+      expect(await verifyUsdcPayment(sig, config)).toBeNull()
+      globalThis.fetch = fakeFetch(rpcResult({ destination: 'OtherAta111' }))
+      expect(await verifyUsdcPayment(sig, config)).toBeNull()
+    } finally { globalThis.fetch = original }
+  })
+
+  test('rejects malformed signatures without an RPC call', async () => {
+    const original = globalThis.fetch
+    let called = false
+    globalThis.fetch = (async () => { called = true; return new Response('{}') }) as unknown as typeof fetch
+    try {
+      expect(await verifyUsdcPayment('bad-signature', config)).toBeNull()
+      expect(called).toBe(false)
+    } finally { globalThis.fetch = original }
   })
 })
 
