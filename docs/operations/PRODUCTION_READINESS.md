@@ -75,6 +75,19 @@ approval gates proven · audit evidence complete · runbook for deploy/verify.
   `bun audit fix`. 12 lower-severity dev-tooling advisories remain and are
   reported non-blocking.
 
+## Infrastructure notes (2026-11-21)
+
+- The VPS root volume filled to 100%, which crashed the self-hosted runner.
+  Docker was already bind-mounted from the 1.7T block volume at `/mnt/data`
+  (`/var/lib/docker` → `/dev/sdb[/docker]`). The `azimara-mesh-runner` home was
+  moved to `/mnt/data/azimara-mesh-runner` and symlinked back to
+  `/home/ubuntu/azimara-mesh-runner`, preserving the systemd unit paths.
+- Onchain billing uses Base (EVM) USDC with treasury
+  `0x9cb57c0dAF38462447509998647eD06488CBeBf8`. Base Sepolia is the default;
+  `ONCHAIN_NETWORK=base-mainnet` is an explicit opt-in.
+- Legal/tax review of token payments is tracked as NOT COMPLETE in
+  `docs/commercial/LEGAL_TAX_REVIEW.md`.
+
 ## Outstanding production gates
 
 Tenant-isolation integration suite, worker-crash recovery demonstration,
