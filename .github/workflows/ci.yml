@@ -28,7 +28,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Use preinstalled Bun
         # Multiple runners share this host; setup-bun overwrites the shared
