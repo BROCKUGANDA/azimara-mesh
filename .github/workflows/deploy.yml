@@ -49,7 +49,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Generate Prisma client
-        run: bunx prisma generate
+        run: bun x prisma generate
 
       - name: Verify typecheck and tests before release
         run: |
