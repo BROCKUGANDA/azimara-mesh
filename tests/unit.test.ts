@@ -64,7 +64,7 @@ describe('typescript SDK', () => {
         data: [{ id: 'a1', name: 'A', slug: 'a', status: 'healthy', currentVersion: '1.0.0' }],
         pagination: { hasMore: false, nextCursor: null },
       }), { status: 200 })
-    }) as typeof fetch
+    }) as unknown as typeof fetch
     const client = new MeshClient({ apiKey: 'azm_test', fetch: fakeFetch })
     const page = await client.listAgents({ limit: 10 })
     expect(auth).toBe('Bearer azm_test')
@@ -76,7 +76,7 @@ describe('typescript SDK', () => {
     const fakeFetch = (async () => new Response(
       JSON.stringify({ error: { code: 'FORBIDDEN', message: 'Insufficient scope' } }),
       { status: 403 },
-    )) as typeof fetch
+    )) as unknown as typeof fetch
     const client = new MeshClient({ apiKey: 'azm_test', fetch: fakeFetch })
     try {
       await client.listExecutions()
