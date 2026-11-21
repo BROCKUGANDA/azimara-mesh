@@ -1,138 +1,171 @@
-// Onchain billing for Azimara Mesh (Solana SPL USDC).
+// Onchain billing for Azimara Mesh (Base EVM USDC).
 //
 // There is no card processor. Value enters the system only through a verified
-// onchain USDC transfer to the treasury token account. Credits are a local,
-// auditable ledger derived from those payments; usage draws credits down and
-// any remainder becomes a pay-per-use settlement record. Live/mainnet mode is
-// explicit; devnet is the default.
+// onchain USDC transfer to the configured treasury address. Credits are a local,
+// auditable ledger derived from those payments; usage draws credits down and any
+// remainder becomes a pay-per-use settlement record. Base Sepolia is the
+// default; Base mainnet requires explicit opt-in.
 
 import { db } from '@/lib/db'
 
-export type OnchainCluster = 'devnet' | 'mainnet-beta'
+export type OnchainNetwork = 'base-sepolia' | 'base-mainnet'
 
-export const USDC_MINTS: Record<OnchainCluster, string> = {
-  devnet: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
-  'mainnet-beta': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+export const USDC_ADDRESSES: Record<OnchainNetwork, string> = {
+  'base-sepolia': '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+  'base-mainnet': '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 }
 
+export const CHAIN_IDS: Record<OnchainNetwork, number> = {
+  'base-sepolia': 84532,
+  'base-mainnet': 8453,
+}
+
+// keccak256("Transfer(address,address,uint256)") — ERC-20 Transfer topic.
+export const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+
 export interface OnchainConfig {
-  cluster: OnchainCluster
+  network: OnchainNetwork
   rpcUrl: string
-  treasuryWallet: string
-  treasuryAta: string
-  usdcMint: string
+  treasuryAddress: string
+  usdcAddress: string
+  chainId: number
+  minConfirmations: number
 }
 
 export function getOnchainConfig(): OnchainConfig {
-  const cluster = (process.env.SOLANA_CLUSTER ?? 'devnet') as OnchainCluster
-  if (cluster !== 'devnet' && cluster !== 'mainnet-beta') throw new Error('Invalid SOLANA_CLUSTER')
-  const treasuryWallet = process.env.SOLANA_TREASURY_WALLET ?? ''
-  const treasuryAta = process.env.SOLANA_TREASURY_ATA ?? ''
-  if (!treasuryWallet || !treasuryAta) {
-    throw new Error('SOLANA_TREASURY_WALLET and SOLANA_TREASURY_ATA are required')
+  const network = (process.env.ONCHAIN_NETWORK ?? 'base-sepolia') as OnchainNetwork
+  if (network !== 'base-sepolia' && network !== 'base-mainnet') throw new Error('Invalid ONCHAIN_NETWORK')
+  const treasuryAddress = (process.env.ONCHAIN_TREASURY_ADDRESS ?? '').toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(treasuryAddress)) {
+    throw new Error('ONCHAIN_TREASURY_ADDRESS must be a valid EVM address')
   }
-  const mint = process.env.USDC_MINT ?? USDC_MINTS[cluster]
   return {
-    cluster,
-    rpcUrl: process.env.SOLANA_RPC_URL ?? (cluster === 'devnet' ? 'https://api.devnet.solana.com' : 'https://api.mainnet-beta.solana.com'),
-    treasuryWallet,
-    treasuryAta,
-    usdcMint: mint,
+    network,
+    rpcUrl: process.env.ONCHAIN_RPC_URL ?? (network === 'base-mainnet' ? 'https://mainnet.base.org' : 'https://sepolia.base.org'),
+    treasuryAddress,
+    usdcAddress: (process.env.USDC_ADDRESS ?? USDC_ADDRESSES[network]).toLowerCase(),
+    chainId: CHAIN_IDS[network],
+    minConfirmations: Number(process.env.ONCHAIN_MIN_CONFIRMATIONS ?? 12),
   }
 }
 
 export function isOnchainBillingConfigured(): boolean {
-  return Boolean(process.env.SOLANA_TREASURY_WALLET && process.env.SOLANA_TREASURY_ATA)
+  return /^0x[a-fA-F0-9]{40}$/.test(process.env.ONCHAIN_TREASURY_ADDRESS ?? '')
 }
 
 export interface VerifiedPayment {
   signature: string
   payer: string
   amountUsd: number
-  mint: string
-  cluster: OnchainCluster
+  tokenAddress: string
+  network: OnchainNetwork
+  chainId: number
   destination: string
-  blockTime?: number
+  blockNumber?: number
 }
 
-interface ParsedInstruction {
-  program?: string
-  parsed?: {
-    type?: string
-    info?: {
-      destination?: string
-      source?: string
-      mint?: string
-      amount?: string
-      tokenAmount?: { uiAmount?: number | null; amount?: string; decimals?: number }
-    }
-  }
+interface EvmLog {
+  address?: string
+  topics?: string[]
+  data?: string
+}
+
+interface TxReceipt {
+  status?: string
+  blockNumber?: string
+  logs?: EvmLog[]
+  transactionHash?: string
+}
+
+function normalizeAddress(value: string): string {
+  const clean = value.toLowerCase().replace(/^0x/, '')
+  return `0x${clean.slice(-40)}`
+}
+
+/** Parse a padded ERC-20 topic into an EVM address. */
+function addressFromTopic(topic: string | undefined): string {
+  if (!topic) return ''
+  return normalizeAddress(topic.replace(/^0x/, '').slice(-64))
+}
+
+/** Parse a uint256 hex amount with USDC's 6 decimals. */
+function amountFromHex(data: string | undefined): number {
+  if (!data || !/^0x[0-9a-f]+$/i.test(data)) return 0
+  try {
+    const raw = BigInt(data)
+    // USDC has 6 decimals. NaN/Infinity are impossible with BigInt.
+    const usd = Number(raw) / 1_000_000
+    return Number.isFinite(usd) && usd > 0 ? usd : 0
+  } catch { return 0 }
+}
+
+async function rpc(url: string, method: string, params: unknown[]): Promise<unknown> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    signal: AbortSignal.timeout(8000),
+  })
+  if (!res.ok) throw new Error(`RPC ${method} failed: ${res.status}`)
+  const json = await res.json() as { result?: unknown; error?: unknown }
+  if (json.error) throw new Error(`RPC ${method} error`)
+  return json.result
 }
 
 /**
- * Verify a Solana transaction signature via JSON-RPC and extract USDC transfers
- * to the configured treasury ATA. Verification is read-only and deterministic;
- * a duplicate signature cannot double-credit because the payment row is unique.
+ * Verify a Base transaction hash via JSON-RPC and extract USDC ERC-20 Transfer
+ * logs to the configured treasury. Checks success status, chain id, required
+ * confirmations and token address. A duplicate hash cannot double-credit
+ * because the payment row is unique.
  */
 export async function verifyUsdcPayment(
   signature: string,
   config = getOnchainConfig(),
 ): Promise<VerifiedPayment | null> {
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,88}$/.test(signature)) return null
+  if (!/^0x[a-fA-F0-9]{64}$/.test(signature)) return null
+  const hash = signature.toLowerCase()
+  const expectedToken = normalizeAddress(config.usdcAddress)
+  const expectedTreasury = normalizeAddress(config.treasuryAddress)
 
-  const body = {
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'getTransaction',
-    params: [signature, {
-      encoding: 'jsonParsed',
-      maxSupportedTransactionVersion: 0,
-      commitment: 'finalized',
-    }],
-  }
-  const res = await fetch(config.rpcUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(8000),
-  })
-  if (!res.ok) return null
-  const json = await res.json() as {
-    result?: {
-      meta?: { err?: unknown }
-      blockTime?: number
-      transaction?: {
-        message?: {
-          accountKeys?: Array<{ pubkey: string }>
-          instructions?: ParsedInstruction[]
-        }
-      }
+  try {
+    const [chainIdHex, receipt, headHex] = await Promise.all([
+      rpc(config.rpcUrl, 'eth_chainId', []) as Promise<string>,
+      rpc(config.rpcUrl, 'eth_getTransactionReceipt', [hash]) as Promise<TxReceipt | null>,
+      rpc(config.rpcUrl, 'eth_blockNumber', []) as Promise<string>,
+    ])
+    if (Number(chainIdHex) !== config.chainId) return null
+    if (!receipt || receipt.status !== '0x1' || !receipt.logs) return null
+    const txBlock = Number(receipt.blockNumber)
+    const head = Number(headHex)
+    if (!Number.isFinite(txBlock) || head - txBlock + 1 < config.minConfirmations) return null
+
+    const payerLogs = receipt.logs.find((log) =>
+      normalizeAddress(log.address ?? '') === expectedToken &&
+      (log.topics?.[0] ?? '').toLowerCase() === TRANSFER_TOPIC,
+    )
+    if (!payerLogs) return null
+
+    let total = 0
+    for (const log of receipt.logs) {
+      if (normalizeAddress(log.address ?? '') !== expectedToken) continue
+      if ((log.topics?.[0] ?? '').toLowerCase() !== TRANSFER_TOPIC) continue
+      if (addressFromTopic(log.topics?.[2]) !== expectedTreasury) continue
+      total += amountFromHex(log.data)
     }
-  }
-  const tx = json.result
-  if (!tx || tx.meta?.err || !tx.transaction?.message) return null
+    if (total <= 0) return null
 
-  let total = 0
-  for (const ix of tx.transaction.message.instructions ?? []) {
-    if (ix.program !== 'spl-token' || !ix.parsed) continue
-    if (!['transfer', 'transferChecked'].includes(ix.parsed.type ?? '')) continue
-    const info = ix.parsed.info ?? {}
-    if (info.destination !== config.treasuryAta) continue
-    if (info.mint && info.mint !== config.usdcMint) continue
-    const amount = info.tokenAmount?.uiAmount ??
-      (info.amount ? Number(info.amount) / 1_000_000 : 0)
-    if (Number.isFinite(amount) && amount > 0) total += amount
-  }
-  if (total <= 0) return null
-
-  return {
-    signature,
-    payer: tx.transaction.message.accountKeys?.[0]?.pubkey ?? '',
-    amountUsd: Math.round(total * 1e6) / 1e6,
-    mint: config.usdcMint,
-    cluster: config.cluster,
-    destination: config.treasuryAta,
-    blockTime: tx.blockTime,
+    return {
+      signature: hash,
+      payer: addressFromTopic(payerLogs.topics?.[1]),
+      amountUsd: Math.round(total * 1e6) / 1e6,
+      tokenAddress: expectedToken,
+      network: config.network,
+      chainId: config.chainId,
+      destination: expectedTreasury,
+      blockNumber: txBlock,
+    }
+  } catch {
+    return null
   }
 }
 
@@ -175,8 +208,9 @@ export async function applyVerifiedPayment(payment: VerifiedPayment, workspaceId
         signature: payment.signature,
         payer: payment.payer,
         amountUsd: payment.amountUsd,
-        mint: payment.mint,
-        cluster: payment.cluster,
+        tokenAddress: payment.tokenAddress,
+        network: payment.network,
+        chainId: payment.chainId,
         destination: payment.destination,
       },
     })
@@ -201,8 +235,6 @@ export async function applyUsageToCredits(
 ): Promise<number> {
   return db.$transaction(async (tx) => {
     await ledgerLock(tx, workspaceId)
-    // Idempotent replay: the ledger reference is unique, so a repeated usage
-    // idempotency key must not draw credits down twice.
     const existing = await tx.creditLedgerEntry.findUnique({
       where: { workspaceId_kind_reference: { workspaceId, kind: 'usage', reference } },
     })
@@ -232,11 +264,7 @@ export interface UsageSettlementResult {
   status: 'settled' | 'pending'
 }
 
-/**
- * Settle a usage period. Idempotent by (workspaceId, periodStart). Prepaid
- * credits are applied first; any remainder is recorded for onchain pay-per-use
- * collection and never silently forgiven.
- */
+/** Settle a usage period. Idempotent by (workspaceId, periodStart). */
 export async function settleUsagePeriod(
   workspaceId: string,
   periodStart: Date,
@@ -299,19 +327,15 @@ const PAID_FEATURES = ['sso', 'scim', 'dedicated-runtime', 'marketplace', 'multi
 export async function hasEntitlement(workspaceId: string, feature: string): Promise<boolean> {
   if (FREE_FEATURES.includes(feature)) return true
   if (!PAID_FEATURES.includes(feature)) return false
-  // A paid plan may have been activated by an onchain subscription payment.
   const subscription = await db.subscription.findUnique({
     where: { workspaceId },
     select: { status: true },
   })
   if (subscription?.status === 'active') return true
-  // Prepaid credits unlock paid features while they last.
   if ((await creditBalance(workspaceId)) > 0) return true
-  // Explicit pay-per-use opt-in allows work that will be settled onchain later.
   return process.env.MESH_PAY_PER_USE === '1'
 }
 
-// Retained export names used by tests and callers; no card processor remains.
 export const onchainBilling = {
   getConfig: getOnchainConfig,
   verify: verifyUsdcPayment,

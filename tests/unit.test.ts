@@ -8,7 +8,7 @@ import { buildDockerArgs, DEFAULT_LIMITS, untrustedCodeAllowed } from '../src/li
 import { DevSecretBroker, setSecretBroker } from '../src/lib/secret-broker'
 import { hashKey, hasScope, type ApiKeyPrincipal } from '../src/lib/api-key-auth'
 import { MeshClient, MeshError } from '../sdks/typescript/src/index'
-import { verifyUsdcPayment, USDC_MINTS, type OnchainConfig } from '../src/lib/billing-provider'
+import { verifyUsdcPayment, USDC_ADDRESSES, TRANSFER_TOPIC, type OnchainConfig } from '../src/lib/billing-provider'
 import { spanAttributes, telemetryEnabled } from '../src/lib/telemetry'
 import { oidcConfigured } from '../src/lib/oidc'
 import { validatePackageManifest, marketplaceEnabled, type PackageManifest } from '../src/lib/marketplace-trust'
@@ -123,64 +123,82 @@ describe('marketplace trust', () => {
 })
 
 describe('onchain payment verification', () => {
+  const treasury = '0x9cb57c0daf38462447509998647ed06488cbebf8'
+  const payer = '0x1111111111111111111111111111111111111111'
   const config: OnchainConfig = {
-    cluster: 'devnet',
+    network: 'base-sepolia',
     rpcUrl: 'https://rpc.test',
-    treasuryWallet: 'TreasuryWallet1111111111111111111111111',
-    treasuryAta: 'TreasuryAta11111111111111111111111111111',
-    usdcMint: USDC_MINTS.devnet,
+    treasuryAddress: treasury,
+    usdcAddress: USDC_ADDRESSES['base-sepolia'],
+    chainId: 84532,
+    minConfirmations: 1,
   }
-  const sig = '5'.repeat(64)
+  const sig = `0x${'a'.repeat(64)}`
+  const pad = (address: string) => `0x${'0'.repeat(24)}${address.replace(/^0x/, '').toLowerCase()}`
+  // 25.5 USDC = 25,500,000 base units = 0x1851960
+  const amountHex = '0x1851960'
 
-  function rpcResult(options: { destination?: string; error?: unknown } = {}) {
-    const tx = {
-      meta: { err: options.error ?? null },
-      blockTime: 1700000000,
-      transaction: {
-        message: {
-          accountKeys: [{ pubkey: 'PayerWallet111111111111111111111111' }],
-          instructions: [{
-            program: 'spl-token',
-            parsed: {
-              type: 'transfer',
-              info: { destination: options.destination ?? config.treasuryAta, tokenAmount: { uiAmount: 25.5 } },
-            },
-          }],
-        },
-      },
+  function rpcFetch(options: {
+    chainId?: string
+    status?: string
+    destination?: string
+    head?: string
+  } = {}) {
+    const receipt = {
+      status: options.status ?? '0x1',
+      blockNumber: '0x10',
+      logs: [{
+        address: config.usdcAddress,
+        topics: [
+          TRANSFER_TOPIC,
+          pad(payer),
+          pad(options.destination ?? treasury),
+        ],
+        data: amountHex,
+      }],
     }
-    return { jsonrpc: '2.0', id: 1, result: tx }
+    return (async (input: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { method: string }
+      const result = body.method === 'eth_chainId' ? (options.chainId ?? '0x14a34')
+        : body.method === 'eth_blockNumber' ? (options.head ?? '0x10')
+          : body.method === 'eth_getTransactionReceipt' ? receipt : null
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result }), { status: 200 })
+    }) as unknown as typeof fetch
   }
 
-  const fakeFetch = (payload: unknown) => (async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
-
-  test('extracts USDC amount and payer from a finalized transfer', async () => {
+  test('extracts USDC amount and payer from a confirmed transfer', async () => {
     const original = globalThis.fetch
-    globalThis.fetch = fakeFetch(rpcResult())
+    globalThis.fetch = rpcFetch()
     try {
       const payment = await verifyUsdcPayment(sig, config)
       expect(payment?.amountUsd).toBe(25.5)
-      expect(payment?.destination).toBe(config.treasuryAta)
-      expect(payment?.cluster).toBe('devnet')
+      expect(payment?.payer).toBe(payer)
+      expect(payment?.destination).toBe(treasury)
+      expect(payment?.chainId).toBe(84532)
+      expect(payment?.network).toBe('base-sepolia')
     } finally { globalThis.fetch = original }
   })
 
-  test('rejects failed transactions and wrong destinations', async () => {
+  test('rejects wrong chain, failed receipts, wrong destination and low confirmations', async () => {
     const original = globalThis.fetch
     try {
-      globalThis.fetch = fakeFetch(rpcResult({ error: 'insufficient funds' }))
+      globalThis.fetch = rpcFetch({ chainId: '0x1' })
       expect(await verifyUsdcPayment(sig, config)).toBeNull()
-      globalThis.fetch = fakeFetch(rpcResult({ destination: 'OtherAta111' }))
+      globalThis.fetch = rpcFetch({ status: '0x0' })
+      expect(await verifyUsdcPayment(sig, config)).toBeNull()
+      globalThis.fetch = rpcFetch({ destination: payer })
+      expect(await verifyUsdcPayment(sig, config)).toBeNull()
+      globalThis.fetch = rpcFetch({ head: '0xf' })
       expect(await verifyUsdcPayment(sig, config)).toBeNull()
     } finally { globalThis.fetch = original }
   })
 
-  test('rejects malformed signatures without an RPC call', async () => {
+  test('rejects malformed transaction hashes without an RPC call', async () => {
     const original = globalThis.fetch
     let called = false
     globalThis.fetch = (async () => { called = true; return new Response('{}') }) as unknown as typeof fetch
     try {
-      expect(await verifyUsdcPayment('bad-signature', config)).toBeNull()
+      expect(await verifyUsdcPayment('not-a-hash', config)).toBeNull()
       expect(called).toBe(false)
     } finally { globalThis.fetch = original }
   })

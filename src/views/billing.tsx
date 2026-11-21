@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { useState } from 'react'
 
 interface BillingData {
-  rails: { type: string; cluster: string; treasuryWallet: string | null; usdcMint: string | null }
+  rails: { type: string; network: string; chainId: number | null; treasuryAddress: string | null; usdcAddress: string | null }
   plans: { id: string; slug: string; name: string; priceMonth: number; maxAgents: number; maxSeats: number; includedCredits: number; features: string[] }[]
   subscription: { plan: string; planSlug: string; priceMonth: number; includedCredits: number; maxAgents: number; maxSeats: number; status: string; seats: number; spendCapUsd: number; currentPeriodStart: string; currentPeriodEnd: string } | null
   credits: { balanceUsd: number }
@@ -74,11 +74,11 @@ export function BillingView() {
 
   return (
     <div className="space-y-5" data-testid="billing-view">
-      <PageHeader title="Billing" subtitle="Onchain USDC credits on Solana. Verify a transfer to credit your workspace; metered usage draws credits down and any remainder becomes a pending onchain settlement." />
+      <PageHeader title="Billing" subtitle="Onchain USDC credits on Base. Verify a transfer to credit your workspace; metered usage draws credits down and any remainder becomes a pending onchain settlement." />
       {error && <ErrorNote message={error} />}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MetricCard label="Payment rail" value="SOL · USDC" accent="violet" sub={data?.rails.cluster ?? '—'} loading={loading} />
+        <MetricCard label="Payment rail" value="BASE · USDC" accent="violet" sub={data?.rails.network ?? '—'} loading={loading} />
         <MetricCard label="USDC credit balance" value={fmtUsd(data?.credits.balanceUsd)} accent="teal" sub="verified onchain only" loading={loading} />
         <MetricCard label="Month-to-date usage" value={fmtUsd(data?.usage.spent)} accent="cyan" loading={loading} />
         <MetricCard label="Spend cap" value={fmtUsd(data?.usage.cap)} accent={data && data.usage.forecast > data.usage.cap ? 'danger' : 'blue'} sub={data ? `forecast ${fmtUsd(data.usage.forecast)}` : ''} loading={loading} />
@@ -112,11 +112,11 @@ export function BillingView() {
 
       <Section title="Onchain credits" description="Send SPL USDC to the treasury and paste the finalized transaction signature to credit this workspace">
         <div className="flex flex-col md:flex-row gap-2">
-          <Input value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="Solana transaction signature" className="radius-control bg-panel font-mono tnum flex-1" />
+          <Input value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="Base transaction hash (0x…)" className="radius-control bg-panel font-mono tnum flex-1" />
           <Button variant="outline" className="radius-button" disabled={!signature.trim()} onClick={verifyPayment}>Verify &amp; credit</Button>
         </div>
         <p className="text-caption text-muted-foreground mt-3">
-          Treasury: <span className="font-mono">{data?.rails.treasuryWallet ?? '—'}</span> · mint: <span className="font-mono">{data?.rails.usdcMint ?? '—'}</span>
+          Treasury: <span className="font-mono">{data?.rails.treasuryAddress ?? '—'}</span> · USDC: <span className="font-mono">{data?.rails.usdcAddress ?? '—'}</span>
         </p>
         <p className="text-caption text-muted-foreground mt-1">Each signature is verified once; duplicate submissions cannot double-credit.</p>
       </Section>

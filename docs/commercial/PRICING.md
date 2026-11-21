@@ -1,8 +1,8 @@
-# AZIMARA MESH — Pricing (USDC on Solana)
+# AZIMARA MESH — Pricing (USDC on Base)
 
 Four tiers are represented in the `Plan` table and Billing view. Tier prices are
-guidance for pilots, not validated market prices. All payments are made in SPL
-USDC on Solana; there is no card processor.
+guidance for pilots, not validated market prices. All payments are made in
+ERC-20 USDC on Base; there is no card processor.
 
 ## Community — free
 - 5 agents · 2 seats · small introductory credit grant

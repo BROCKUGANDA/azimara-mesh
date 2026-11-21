@@ -277,9 +277,11 @@ WS8 (ecosystem):
 Unit tests now 23 passing; integration suites 5 + 7 passing.
 
 
-## Onchain billing rewrite (2026-11-21)
+## Onchain billing rewrite (2026-11-21, updated to Base)
 
-Stripe/card billing was removed entirely and replaced with a Solana SPL USDC rail:
+Stripe/card billing was removed entirely and replaced with an onchain USDC rail
+on Base (the treasury address supplied is EVM-format, so the Solana rail was
+superseded):
 
 - `src/lib/billing-provider.ts`: pure JSON-RPC verification of finalized
   transactions (no native Solana SDK, no card processor). Devnet default,
@@ -298,5 +300,7 @@ Stripe/card billing was removed entirely and replaced with a Solana SPL USDC rai
   payment, idempotent drawdown, settlement remainder, credit-based entitlements).
   All pass against disposable Postgres.
 
-External gates remain: funded treasury ATA, mainnet opt-in, legal/tax review.
+External gates remain: funded treasury on Base, `ONCHAIN_NETWORK=base-mainnet`
+opt-in, and the independent legal/tax review tracked in
+`docs/commercial/LEGAL_TAX_REVIEW.md` (status: NOT COMPLETE).
 

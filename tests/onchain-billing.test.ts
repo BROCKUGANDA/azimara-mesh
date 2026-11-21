@@ -4,7 +4,7 @@ import { db, migrationDb } from '@/lib/db'
 import { runWithDatabaseContext } from '@/lib/db-context'
 import {
   applyVerifiedPayment, creditBalance, applyUsageToCredits,
-  settleUsagePeriod, hasEntitlement, USDC_MINTS, type VerifiedPayment,
+  settleUsagePeriod, hasEntitlement, USDC_ADDRESSES, type VerifiedPayment,
 } from '@/lib/billing-provider'
 
 const suffix = randomBytes(4).toString('hex')
@@ -15,8 +15,9 @@ const ctx = () => ({ userId: 'u1', workspaceId: ws, organizationId: orgId })
 
 function payment(sig: string, amountUsd: number): VerifiedPayment {
   return {
-    signature: sig, payer: 'Payer111', amountUsd,
-    mint: USDC_MINTS.devnet, cluster: 'devnet', destination: 'TreasuryAta111',
+    signature: sig, payer: '0x1111111111111111111111111111111111111111', amountUsd,
+    tokenAddress: USDC_ADDRESSES['base-sepolia'], network: 'base-sepolia',
+    chainId: 84532, destination: '0x9cb57c0daf38462447509998647ed06488cbebf8',
   }
 }
 

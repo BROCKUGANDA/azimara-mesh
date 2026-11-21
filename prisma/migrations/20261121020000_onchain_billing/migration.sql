@@ -1,12 +1,13 @@
--- Onchain billing ledger (Solana SPL USDC). Replaces the Stripe-centric model.
+-- Onchain billing ledger (Base EVM USDC). Replaces the card-processor model.
 CREATE TABLE "OnchainPayment" (
     "id" TEXT NOT NULL,
     "workspaceId" TEXT NOT NULL,
     "signature" TEXT NOT NULL,
     "payer" TEXT NOT NULL,
     "amountUsd" DOUBLE PRECISION NOT NULL,
-    "mint" TEXT NOT NULL,
-    "cluster" TEXT NOT NULL,
+    "tokenAddress" TEXT NOT NULL,
+    "network" TEXT NOT NULL,
+    "chainId" INTEGER NOT NULL,
     "destination" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'confirmed',
     "confirmedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

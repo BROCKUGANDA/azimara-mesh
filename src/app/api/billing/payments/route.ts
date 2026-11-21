@@ -1,5 +1,5 @@
-// Onchain payment verification. Accepts a Solana transaction signature,
-// verifies the SPL USDC transfer to the treasury on finalize, and credits the
+// Onchain payment verification. Accepts a Base transaction hash,
+// verifies the confirmed USDC Transfer to the treasury, and credits the
 // workspace exactly once. No card signatures or webhooks are involved.
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
@@ -25,13 +25,14 @@ export async function GET(req: NextRequest) {
       Promise.resolve(isOnchainBillingConfigured() ? getOnchainConfig() : null),
     ])
     return {
-      cluster: config?.cluster ?? 'not-configured',
-      treasuryWallet: config?.treasuryWallet ?? null,
-      usdcMint: config?.usdcMint ?? null,
+      network: config?.network ?? 'not-configured',
+      chainId: config?.chainId ?? null,
+      treasuryAddress: config?.treasuryAddress ?? null,
+      usdcAddress: config?.usdcAddress ?? null,
       creditBalanceUsd: await creditBalance(ctx.workspaceId),
       payments: payments.map((p) => ({
         signature: p.signature, payer: p.payer, amountUsd: p.amountUsd,
-        cluster: p.cluster, status: p.status, confirmedAt: p.confirmedAt.toISOString(),
+        network: p.network, chainId: p.chainId, status: p.status, confirmedAt: p.confirmedAt.toISOString(),
       })),
       ledger: ledger.map((e) => ({
         id: e.id, amountUsd: e.amountUsd, kind: e.kind,
@@ -65,8 +66,9 @@ export async function POST(req: NextRequest) {
       action: 'billing.onchain_payment', resourceType: 'payment', resourceId: signature,
       severity: 'notice',
       detail: {
-        amountUsd: verified.amountUsd, cluster: verified.cluster,
-        payer: verified.payer, mint: verified.mint,
+        amountUsd: verified.amountUsd, network: verified.network,
+        chainId: verified.chainId, payer: verified.payer,
+        tokenAddress: verified.tokenAddress,
       },
     })
     return { ok: true, duplicate: false, amountUsd: verified.amountUsd, signature, balanceUsd: await creditBalance(ctx.workspaceId) }

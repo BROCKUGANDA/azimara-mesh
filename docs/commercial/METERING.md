@@ -1,4 +1,4 @@
-# AZIMARA MESH — Metering (onchain settlement)
+# AZIMARA MESH — Metering (onchain settlement on Base)
 
 ## Principles
 

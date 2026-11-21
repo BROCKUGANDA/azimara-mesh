@@ -23,7 +23,13 @@ export async function GET(req: NextRequest) {
       where: { workspaceId: ctx.workspaceId }, orderBy: { periodStart: 'desc' }, take: 12,
     })
     return {
-      rails: { type: 'solana-usdc', cluster: config?.cluster ?? 'not-configured', treasuryWallet: config?.treasuryWallet ?? null, usdcMint: config?.usdcMint ?? null },
+      rails: {
+        type: 'base-usdc',
+        network: config?.network ?? 'not-configured',
+        chainId: config?.chainId ?? null,
+        treasuryAddress: config?.treasuryAddress ?? null,
+        usdcAddress: config?.usdcAddress ?? null,
+      },
       plans: plans.map((p) => ({ ...p, features: JSON.parse(p.featuresJson) })),
       subscription: subscription ? {
         plan: subscription.plan.name, planSlug: subscription.plan.slug, priceMonth: subscription.plan.priceMonth,

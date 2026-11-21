@@ -825,7 +825,7 @@ model BudgetReservation {
 }
 
 // ---------------------------------------------------------------------------
-// Onchain billing (Solana SPL USDC)
+// Onchain billing (Base EVM USDC)
 // ---------------------------------------------------------------------------
 
 model OnchainPayment {
@@ -834,8 +834,9 @@ model OnchainPayment {
   signature     String    @unique
   payer         String
   amountUsd     Float
-  mint          String
-  cluster       String
+  tokenAddress  String
+  network       String
+  chainId       Int
   destination   String
   status        String    @default("confirmed") // confirmed | settled | refunded
   confirmedAt   DateTime  @default(now())
