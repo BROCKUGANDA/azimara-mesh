@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { db, migrationDb } from '@/lib/db'
+import { getEventBus } from '@/lib/event-bus'
 import type { Prisma } from '@prisma/client'
 
 export interface DomainEvent {
@@ -115,6 +116,22 @@ export async function claimInboxMessage(input: {
     skipDuplicates: true,
   })
   return result.count === 1
+}
+
+/** Publish a batch using the configured transport (in-process by default). */
+export async function publishWithConfiguredBus(limit = 50): Promise<number> {
+  const bus = await getEventBus()
+  return publishPending(limit, async (event) => {
+    let payload: Record<string, unknown> = {}
+    try { payload = JSON.parse(event.payloadJson) as Record<string, unknown> } catch { /* keep empty */ }
+    await bus.publish({
+      eventId: event.eventId,
+      workspaceId: event.workspaceId,
+      eventType: event.eventType,
+      payload,
+      correlationId: event.correlationId,
+    })
+  })
 }
 
 export async function markInboxProcessed(messageId: string, error?: string): Promise<void> {

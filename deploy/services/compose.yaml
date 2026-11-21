@@ -1,0 +1,100 @@
+# Optional durable-infrastructure services for Workstream 2+.
+# NOT deployed by the current release workflow. Provision only after a capacity
+# check and an explicit approval; see the WS2 plan for cutover gates.
+name: azimara-mesh-services
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      - mesh-redis:/data
+    mem_limit: 768m
+    cpus: 1
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  nats:
+    image: nats:2.11-alpine
+    restart: unless-stopped
+    command: ["-js", "-m", "8222", "-sd", "/data", "--max_payload", "1048576"]
+    ports:
+      - "127.0.0.1:54222:4222"
+      - "127.0.0.1:55822:8222"
+    volumes:
+      - mesh-nats:/data
+    mem_limit: 1g
+    cpus: 1
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.27
+    restart: unless-stopped
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=mesh_bootstrap
+      - POSTGRES_PWD=${TEMPORAL_DB_PASSWORD:?Set TEMPORAL_DB_PASSWORD}
+      - POSTGRES_SEEDS=postgres
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    depends_on:
+      - postgres-for-temporal
+    ports:
+      - "127.0.0.1:57233:7233"
+    mem_limit: 2g
+    cpus: 2
+    security_opt:
+      - no-new-privileges:true
+
+  temporal-ui:
+    image: temporalio/ui:2.35.0
+    restart: unless-stopped
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://127.0.0.1:57234
+    ports:
+      - "127.0.0.1:57234:8080"
+    depends_on:
+      - temporal
+    mem_limit: 512m
+    cpus: 1
+    security_opt:
+      - no-new-privileges:true
+
+  postgres-for-temporal:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: temporal
+      POSTGRES_USER: mesh_bootstrap
+      POSTGRES_PASSWORD: ${TEMPORAL_DB_PASSWORD:?Set TEMPORAL_DB_PASSWORD}
+    volumes:
+      - mesh-temporal-pg:/var/lib/postgresql/data
+    mem_limit: 2g
+    cpus: 2
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mesh_bootstrap -d temporal"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  mesh-redis:
+  mesh-nats:
+  mesh-temporal-pg:

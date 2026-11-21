@@ -185,3 +185,30 @@ implemented as code and migrations but is **not yet cut over in production**:
 Release-blocking gaps from this workstream: production data migration dry run,
 backup/restore verification, and actual service cutover.
 
+
+## Workstream 2 status (2026-11-21) — core complete, cutover staged
+
+Implemented and CI-verified:
+- OutboxEvent, InboxMessage, BudgetReservation models + RLS migration.
+- Transactional outbox: domain mutation and event commit in one transaction
+  (verified: rollback removes the event). Privileged publisher claims with
+  FOR UPDATE SKIP LOCKED and marks rows published.
+- Inbox dedupe by unique messageId (verified under duplicate delivery).
+- Atomic budget reservations: pg_advisory_xact_lock serializes per workspace;
+  reservation is idempotent by key; concurrent starts cannot both exceed the
+  cap (verified: 1 of 2 wins at cap); commit/release settle exactly once.
+- Reservations wired into startAgentRun, gated to Postgres so the live SQLite
+  deployment is unchanged. Background runner now carries tenant RLS context.
+- Event-bus abstraction with in-process default and opt-in NATS JetStream
+  transport (eventId as msgID dedupe key).
+
+Defined but NOT deployed to the live host (require capacity check + approval):
+- deploy/services/compose.yaml: pinned Redis, NATS JetStream, Temporal +
+  UI with a dedicated Postgres, resource limits and no-new-privileges.
+- Temporal worker integration (workflowId = executionId, heartbeat checkpoints,
+  cancellation signal) remains the next WS2 sub-slice; the in-process runner is
+  still the active executor until that cutover is rehearsed.
+
+Remaining WS2 gates: worker-crash recovery drill, duplicate/out-of-order event
+drill against NATS, and a staging rehearsal before any live cutover.
+
