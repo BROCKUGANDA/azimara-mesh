@@ -31,7 +31,9 @@ jobs:
     timeout-minutes: 30
     environment: ${{ inputs.environment }}
     env:
-      DATABASE_URL: 'file:./ci.db'
+      # Build-time placeholders only; the deployed release keeps its own .env.
+      DATABASE_URL: 'postgresql://mesh_app:build-placeholder@127.0.0.1:5432/mesh?schema=public'
+      DATABASE_MIGRATION_URL: 'postgresql://mesh_migrator:build-placeholder@127.0.0.1:5432/mesh?schema=public'
       SESSION_SECRET: 'ci-only-session-secret-not-for-production'
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
@@ -63,6 +65,7 @@ jobs:
       - name: Install artifact and restart service
         env:
           MESH_ENV: ${{ secrets.MESH_ENV }}
-          TARGET_DIR: /home/ubuntu/azimara-mesh-app
+          RELEASES_DIR: /mnt/data/azimara-mesh-releases
+          APP_LINK: /mnt/data/azimara-mesh-app
           SERVICE_NAME: azimara-mesh
         run: bash scripts/vps-deploy.sh

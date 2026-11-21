@@ -88,6 +88,37 @@ approval gates proven · audit evidence complete · runbook for deploy/verify.
 - Legal/tax review of token payments is tracked as NOT COMPLETE in
   `docs/commercial/LEGAL_TAX_REVIEW.md`.
 
+## Production cutover (completed 2026-11-21, operator-approved)
+
+- Live service moved from the earlier SQLite build to PostgreSQL 16 on the
+  1.7T block volume. Container `mesh-prod-postgres`, port `127.0.0.1:55434`,
+  data at `/mnt/data/mesh-postgres`.
+- Roles: `mesh_app` (NOBYPASSRLS, used by the app) and `mesh_migrator`
+  (table owner, used only for migrations). All 5 migrations applied.
+- SQLite data migrated with count verification: 1 org, 1 workspace, 1 user,
+  1 membership, 3 environments, 1 plan, 1 subscription, 1 audit event.
+- Immutable releases at `/mnt/data/azimara-mesh-releases/<timestamp>`;
+  `/mnt/data/azimara-mesh-app` is the active symlink. systemd unit uses that
+  symlink for `WorkingDirectory`, `EnvironmentFile` and `ExecStart`
+  (`/usr/local/bin/bun server.js`, port 3031).
+- Mainnet enabled explicitly: `ONCHAIN_NETWORK=base-mainnet`, chain 8453,
+  treasury `0x9cb57c0dAF38462447509998647eD06488CBeBf8`. Billing API confirms
+  the Base mainnet USDC contract.
+- Verified: external `/api/health` 200 with `database: ok`, `/api/overview`
+  401 without a session, and login succeeds for the existing admin account.
+
+### Rollback
+
+1. Point `/mnt/data/azimara-mesh-app` at the previous release directory.
+2. `sudo systemctl restart azimara-mesh` and verify `/api/health`.
+3. If database rollback is required, stop the service, restore
+   `/mnt/data/backups/azimara-mesh/mesh.db.<timestamp>` into the old app's
+   `db/` directory and restore the old unit from its `.bak-*` copy.
+4. Set `ONCHAIN_NETWORK=base-sepolia` in the rolled-back `.env` to disable
+   mainnet collection.
+
+The backup and the old unit are retained; no destructive cleanup was done.
+
 ## Outstanding production gates
 
 Tenant-isolation integration suite, worker-crash recovery demonstration,
