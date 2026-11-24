@@ -188,6 +188,8 @@
 .radius-card { border-radius: 12px; }
 .radius-large { border-radius: 16px; }
 .radius-modal { border-radius: 20px; }
+.rounded-panel { border-radius: 16px; }
+.rounded-pill { border-radius: 999px; }
 
 /* Motion tokens (§Motion) */
 .motion-fast { transition-duration: 120ms; }
@@ -234,6 +236,28 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* Landing: restrained depth cues for the agentic-systems theme */
+@keyframes mesh-node-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+.mesh-node-pulse { animation: mesh-node-pulse 2.4s ease-in-out infinite; }
+
+@keyframes mesh-line-flow {
+  from { background-position: -240px 0; }
+  to { background-position: 240px 0; }
+}
+.mesh-line-flow {
+  background: linear-gradient(90deg, transparent, rgba(66, 217, 232, 0.55), transparent);
+  background-size: 240px 1px;
+  animation: mesh-line-flow 3s linear infinite;
+}
+
+@media (max-width: 640px) {
+  .text-display { font-size: 38px; }
+  .text-h1 { font-size: 28px; }
 }
 
 /* Trace waterfall + canvas surfaces */

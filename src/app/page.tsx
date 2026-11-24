@@ -3,9 +3,10 @@
 // AZIMARA MESH — single-route application shell with client-side view routing.
 // The preview gateway exposes only `/`; all 25 product views render here.
 
-import { useEffect } from 'react'
-import { useAppStore, api, type SessionData } from '@/lib/client'
+import { useEffect, useState } from 'react'
+import { useAppStore, api, landingViewFor, type SessionData } from '@/lib/client'
 import { AppShell } from '@/components/app-shell'
+import { LandingView } from '@/views/landing'
 import { LoginView } from '@/views/login'
 import { OverviewView } from '@/views/overview'
 import { FleetView } from '@/views/fleet'
@@ -36,7 +37,26 @@ import { BillingView } from '@/views/billing'
 import { SettingsView } from '@/views/settings'
 
 export default function Page() {
-  const { view, params, session, sessionLoaded, setSession, setSessionLoaded } = useAppStore()
+  const { view, params, session, sessionLoaded, setSession, setSessionLoaded, navigate } = useAppStore()
+  const [authScreen, setAuthScreen] = useState<'landing' | 'login'>('landing')
+  const [demoLoading, setDemoLoading] = useState(false)
+  const [demoError, setDemoError] = useState<string | null>(null)
+
+  const enterDemo = async () => {
+    setDemoLoading(true)
+    setDemoError(null)
+    try {
+      // All identity/role decisions are made server-side; the client simply
+      // applies the returned session context and lands on the RBAC board.
+      const result = await api<SessionData>('/api/auth/demo', { method: 'POST' })
+      setSession(result)
+      navigate(landingViewFor(result))
+    } catch (err) {
+      setDemoError(err instanceof Error ? err.message : 'Demo sign-in failed')
+    } finally {
+      setDemoLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -60,7 +80,19 @@ export default function Page() {
     )
   }
 
-  if (!session?.authenticated) return <LoginView />
+  if (!session?.authenticated) {
+    if (authScreen === 'login') {
+      return <LoginView onBack={() => setAuthScreen('landing')} onDemo={enterDemo} />
+    }
+    return (
+      <LandingView
+        onEnterDemo={enterDemo}
+        onSignIn={() => setAuthScreen('login')}
+        demoLoading={demoLoading}
+        demoError={demoError}
+      />
+    )
+  }
 
   return (
     <AppShell>

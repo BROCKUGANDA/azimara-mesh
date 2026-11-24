@@ -15,7 +15,7 @@ const DEMO_ACCOUNTS = [
   { email: 'lena@azimara.ai', role: 'Viewer', name: 'Lena Fischer' },
 ]
 
-export function LoginView() {
+export function LoginView({ onBack, onDemo }: { onBack?: () => void; onDemo?: () => void } = {}) {
   const setSession = useAppStore((s) => s.setSession)
   const navigate = useAppStore((s) => s.navigate)
   const [email, setEmail] = useState('ada@azimara.ai')
@@ -55,6 +55,17 @@ export function LoginView() {
           </div>
           <p className="text-caption text-muted-foreground mb-5">Enterprise AI Agent Fleet Operating System</p>
 
+          {onDemo && (
+            <button
+              type="button"
+              onClick={onDemo}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#8B7CFF]/40 bg-[#8B7CFF]/10 px-3 py-2.5 text-caption font-semibold motion-fast hover:bg-[#8B7CFF]/20"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 text-[#35C991]" aria-hidden />
+              Enter demo workspace in one click
+            </button>
+          )}
+
           <form onSubmit={submit} className="space-y-3.5" data-testid="login-form">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-caption">Work email</Label>
@@ -92,6 +103,11 @@ export function LoginView() {
           <ShieldCheck className="h-3.5 w-3.5 text-[#35C991]" />
           Every consequential operation is policy-checked, metered and audited.
         </p>
+        {onBack && (
+          <button type="button" onClick={onBack} className="mt-3 w-full text-center text-micro text-muted-foreground underline-offset-4 hover:underline motion-fast">
+            ← Back to overview
+          </button>
+        )}
       </div>
     </div>
   )
