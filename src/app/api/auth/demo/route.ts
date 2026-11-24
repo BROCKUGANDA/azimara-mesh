@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import {
-  buildSessionContext, createSessionToken, sessionCookieOptions, SESSION_COOKIE, AuthError,
+  buildSessionContext, createSessionToken, sessionCookieOptions, sessionMetaFromRequest, SESSION_COOKIE, AuthError,
 } from '@/lib/auth'
 import { audit } from '@/lib/audit'
 import { ROLE_RANK, type Role } from '@/lib/types'

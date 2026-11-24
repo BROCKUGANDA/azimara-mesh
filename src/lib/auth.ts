@@ -1,15 +1,25 @@
 // Session auth, RBAC and password handling for the control plane.
-// Passwords: scrypt with per-user salt. Sessions: HMAC-signed cookie, httpOnly.
+// Passwords: scrypt with per-user salt. Sessions: HMAC-signed cookie carrying
+// an opaque id that maps to a revocable server-side record.
 
 import { createHmac, randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto'
 import { cookies } from 'next/headers'
-import type { NextRequest } from 'next/server'
+import type { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { setDatabaseContext } from '@/lib/db-context'
 import { ROLE_RANK, type Role } from '@/lib/types'
 
 const SESSION_COOKIE = 'mesh_session'
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7 // 7 days
+const ACTIVITY_THROTTLE_MS = 60_000 // persist "last seen" at most once a minute
+
+/** Optional idle expiry. Disabled (0) by default; set MESH_SESSION_IDLE_MS to enable. */
+function positiveEnv(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback
+}
+const IDLE_TIMEOUT_MS = positiveEnv(process.env.MESH_SESSION_IDLE_MS, 0)
 
 async function sessionSecret(): Promise<string> {
   const envSecret = process.env.SESSION_SECRET
@@ -56,14 +66,42 @@ export function hashApiKey(raw: string): string {
   return createHash('sha256').update(raw).digest('hex')
 }
 
-interface SessionPayload { userId: string; exp: number }
+interface SessionPayload { userId: string; sid: string; exp: number }
+export interface SessionIdentity extends SessionPayload {}
+
+export interface SessionMeta { userAgent?: string | null; ip?: string | null }
+
+/** Best-effort device/network metadata for the sessions list. Never trust it for auth. */
+export function sessionMetaFromRequest(req: NextRequest): SessionMeta {
+  return {
+    userAgent: req.headers.get('user-agent'),
+    ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      ?? req.headers.get('x-real-ip')
+      ?? null,
+  }
+}
 
 async function sign(payload: string): Promise<string> {
   return createHmac('sha256', await sessionSecret()).update(payload).digest('base64url')
 }
 
-export async function createSessionToken(userId: string): Promise<string> {
-  const payload: SessionPayload = { userId, exp: Date.now() + SESSION_TTL_MS }
+/**
+ * Create a session record and return its signed cookie value. Both login paths
+ * (password + one-click demo) must call this so every session is revocable.
+ */
+export async function createSessionToken(userId: string, meta: SessionMeta = {}): Promise<string> {
+  const sid = randomBytes(24).toString('base64url')
+  const exp = Date.now() + SESSION_TTL_MS
+  await db.userSession.create({
+    data: {
+      id: sid,
+      userId,
+      expiresAt: new Date(exp),
+      userAgent: (meta.userAgent ?? '').slice(0, 500),
+      ip: (meta.ip ?? '').slice(0, 100),
+    },
+  })
+  const payload: SessionPayload = { userId, sid, exp }
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
   return `${body}.${await sign(body)}`
 }
@@ -71,12 +109,15 @@ export async function createSessionToken(userId: string): Promise<string> {
 export async function readSessionToken(token: string | undefined): Promise<SessionPayload | null> {
   if (!token || !token.includes('.')) return null
   const [body, sig] = token.split('.')
+  if (!body || !sig) return null
   const expected = await sign(body)
   if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null
   try {
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString()) as SessionPayload
-    if (!payload.userId || payload.exp < Date.now()) return null
-    return payload
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString()) as Partial<SessionPayload>
+    // `sid` is required: tokens minted before server-side sessions existed are
+    // deliberately rejected so they cannot bypass revocation.
+    if (!payload.userId || !payload.sid || typeof payload.exp !== 'number' || payload.exp < Date.now()) return null
+    return payload as SessionPayload
   } catch { return null }
 }
 
@@ -89,19 +130,30 @@ export interface SessionContext {
   isDemo: boolean
 }
 
-export async function getSessionUser(): Promise<{ userId: string } | null> {
+export async function getSessionUser(): Promise<SessionIdentity | null> {
   const jar = await cookies()
   const session = await readSessionToken(jar.get(SESSION_COOKIE)?.value)
   if (!session) return null
   setDatabaseContext({ userId: session.userId })
-  // A signed cookie is not a revocation mechanism: check account status on
-  // every request so suspended users lose access immediately.
+
+  // A signed cookie is not enough: the server-side record is the revocation
+  // mechanism. Deleting a session (signout / admin revoke) takes effect at once.
+  const record = await db.userSession.findUnique({ where: { id: session.sid } })
+  if (!record || record.userId !== session.userId || record.revokedAt || record.expiresAt.getTime() <= Date.now()) return null
+  const now = Date.now()
+  if (IDLE_TIMEOUT_MS > 0 && now - record.lastActiveAt.getTime() > IDLE_TIMEOUT_MS) return null
+
+  // Check account status on every request so suspended users lose access immediately.
   const user = await db.user.findUnique({ where: { id: session.userId }, select: { status: true } })
   if (!user || user.status !== 'active') return null
+
+  if (now - record.lastActiveAt.getTime() > ACTIVITY_THROTTLE_MS) {
+    await db.userSession.update({ where: { id: record.id }, data: { lastActiveAt: new Date() } }).catch(() => { /* non-fatal */ })
+  }
   return session
 }
 
-export async function requireSession(): Promise<{ userId: string }> {
+export async function requireSession(): Promise<SessionIdentity> {
   const session = await getSessionUser()
   if (!session) throw new AuthError('UNAUTHENTICATED', 'Sign in to continue')
   return session
@@ -125,6 +177,16 @@ export async function sessionCookieOptions(req?: Request | NextRequest) {
     maxAge: SESSION_TTL_MS / 1000,
   }
 }
+
+/**
+ * Delete the session cookie using the *same* attributes it was set with.
+ * Mismatched Secure/SameSite attributes are a common cause of a signout that
+ * looks successful but leaves the browser session alive.
+ */
+export async function clearSessionCookie(res: NextResponse, req?: Request | NextRequest): Promise<void> {
+  const opts = await sessionCookieOptions(req)
+  res.cookies.set(SESSION_COOKIE, '', { ...opts, maxAge: 0, expires: new Date(0) })
+}
 export { SESSION_COOKIE }
 
 export class AuthError extends Error {
@@ -138,6 +200,49 @@ export class PermissionError extends Error {
   code = 'FORBIDDEN'
   status = 403
   constructor(message: string) { super(message) }
+}
+
+// ---------- Session management ----------
+
+export interface SessionView {
+  id: string
+  createdAt: string
+  lastActiveAt: string
+  expiresAt: string
+  userAgent: string
+  ip: string
+  current: boolean
+}
+
+export async function listUserSessions(userId: string, currentSid?: string): Promise<SessionView[]> {
+  const rows = await db.userSession.findMany({
+    where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+    orderBy: { lastActiveAt: 'desc' },
+    select: { id: true, createdAt: true, lastActiveAt: true, expiresAt: true, userAgent: true, ip: true },
+  })
+  return rows.map((r) => ({
+    id: r.id,
+    createdAt: r.createdAt.toISOString(),
+    lastActiveAt: r.lastActiveAt.toISOString(),
+    expiresAt: r.expiresAt.toISOString(),
+    userAgent: r.userAgent,
+    ip: r.ip,
+    current: r.id === currentSid,
+  }))
+}
+
+/** Revoke one session. Scoped by caller in the route handler; no raw token is stored. */
+export async function revokeSession(sid: string): Promise<void> {
+  await db.userSession.updateMany({ where: { id: sid, revokedAt: null }, data: { revokedAt: new Date() } })
+}
+
+/** Revoke every session for a user, optionally keeping the current one alive. */
+export async function revokeAllSessions(userId: string, exceptSid?: string): Promise<number> {
+  const result = await db.userSession.updateMany({
+    where: { userId, revokedAt: null, ...(exceptSid ? { id: { not: exceptSid } } : {}) },
+    data: { revokedAt: new Date() },
+  })
+  return result.count
 }
 
 export async function buildSessionContext(userId: string, activeWorkspaceId?: string | null): Promise<SessionContext> {

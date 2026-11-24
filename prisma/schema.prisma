@@ -67,6 +67,25 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   memberships  Membership[]
+  sessions     UserSession[]
+}
+
+/// Server-side sessions. The signed cookie carries the opaque id; revoking the
+/// row invalidates the cookie immediately (unlike a stateless token alone).
+model UserSession {
+  id           String    @id
+  userId       String
+  userAgent    String    @default("")
+  ip           String    @default("")
+  createdAt    DateTime  @default(now())
+  lastActiveAt DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Membership {

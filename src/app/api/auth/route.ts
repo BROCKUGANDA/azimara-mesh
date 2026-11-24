@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { buildSessionContext, createSessionToken, verifyPassword, SESSION_COOKIE, sessionCookieOptions, getSessionUser } from '@/lib/auth'
+import { buildSessionContext, createSessionToken, verifyPassword, SESSION_COOKIE, sessionCookieOptions, sessionMetaFromRequest, clearSessionCookie, getSessionUser, revokeSession } from '@/lib/auth'
 import { apiError } from '@/lib/types'
 import { audit } from '@/lib/audit'
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return apiError('ACCOUNT_SUSPENDED', 'This account is suspended', 403)
   }
   const ctx = await buildSessionContext(user.id)
-  const token = await createSessionToken(user.id)
+  const token = await createSessionToken(user.id, sessionMetaFromRequest(req))
   const res = NextResponse.json({ authenticated: true, ...ctx })
   res.cookies.set(SESSION_COOKIE, token, await sessionCookieOptions(req))
   const membership = await db.membership.findFirst({ where: { userId: user.id }, include: { workspace: true } })
@@ -37,8 +37,28 @@ export async function POST(req: NextRequest) {
   return res
 }
 
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const session = await getSessionUser()
   const res = NextResponse.json({ authenticated: false })
-  res.cookies.set(SESSION_COOKIE, '', { path: '/', maxAge: 0 })
+  // Match the attributes the cookie was issued with, otherwise the browser can
+  // keep the old session alive after signout.
+  await clearSessionCookie(res, req)
+  if (session) {
+    // Invalidate the record immediately — the cookie alone is not a revocation.
+    await revokeSession(session.sid)
+    const membership = await db.membership.findFirst({
+      where: { userId: session.userId },
+      include: { workspace: { select: { organizationId: true } } },
+    })
+    await audit({
+      organizationId: membership?.workspace.organizationId ?? '',
+      workspaceId: membership?.workspaceId ?? null,
+      actorId: session.userId,
+      action: 'auth.logout',
+      resourceType: 'session',
+      resourceId: session.sid,
+      severity: 'notice',
+    })
+  }
   return res
 }

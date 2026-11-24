@@ -155,6 +155,36 @@ DEMO_WORKSPACE_ID=<workspace-id> DATABASE_MIGRATION_URL=postgres://... \
   bun prisma/seed-demo-data.ts
 ```
 
+## Responsive, imagery and cross-browser (2026-11-25)
+
+- Mobile/tablet: viewport metadata with `viewport-fit=cover`, safe-area padding,
+  coarse-pointer touch targets, horizontal table scrolling, narrower mobile
+  workspace switcher, mobile drawer capped at 85vw, wrapping command palette,
+  and mobile-friendly typography scales. Verified at 390×844 in the browser
+  (overview, navigation drawer, workflows table).
+- Imagery: raster assets are generated from the editable brand SVG by
+  `bun run assets:generate` — `apple-touch-icon.png`, `og-image.png`/`.svg` and
+  a text-free `mesh-hero-pattern.svg` used as a static fallback behind the live
+  canvas. Social metadata references the OG image and apple touch icon.
+- Cross-browser: replaced `AbortSignal.timeout` with an AbortController helper
+  (`src/lib/http.ts`), added a `ResizeObserver` fallback, guarded vibration,
+  avoided unsupported CSS where possible and added `@supports` fallbacks.
+
+## Automatic version → promote → deploy (2026-11-25)
+
+- `scripts/next-version.sh` derives the next semver from `v*` tags (`#major` /
+  `#minor` in the commit subject control bumps; default is patch).
+- `.github/workflows/release.yml` runs on successful push CI completion only.
+  It computes the version, builds with `NEXT_PUBLIC_APP_VERSION`, stages an
+  immutable release, runs forward-only migrations, boots the staged build on a
+  probe port for a health check (staging gate), atomically swaps the symlink,
+  tags the commit, publishes a GitHub release and re-checks production health.
+- Any migration, smoke-gate or health failure aborts promotion and restores the
+  previous release. A failed first attempt was diagnosed (CI placeholder DB
+  env overriding the release `.env` in the probe) and fixed by clearing those
+  variables for the probe process; the following automatic run promoted
+  `v0.1.0` successfully.
+
 ## Outstanding production gates
 
 Tenant-isolation integration suite, worker-crash recovery demonstration,
