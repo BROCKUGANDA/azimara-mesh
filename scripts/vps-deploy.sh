@@ -61,7 +61,9 @@ if [ "${SKIP_PROBE:-0}" != "1" ]; then
     exit 1
   fi
   PROBE_PID_FILE="/tmp/mesh-probe-${STAMP}.pid"
-  (cd "$RELEASE" && PORT="$PROBE_PORT" nohup bun server.js > "/tmp/mesh-probe-${STAMP}.log" 2>&1 & echo $! > "$PROBE_PID_FILE")
+  # Clear CI placeholder credentials so bun loads the release's own .env.
+  (cd "$RELEASE" && env -u DATABASE_URL -u DATABASE_MIGRATION_URL -u SESSION_SECRET \
+    PORT="$PROBE_PORT" nohup bun server.js > "/tmp/mesh-probe-${STAMP}.log" 2>&1 & echo $! > "$PROBE_PID_FILE")
   PROBE_OK=0
   for _ in $(seq 1 25); do
     code="$(curl -s -o "/tmp/mesh-probe-${STAMP}.json" -w '%{http_code}' "http://127.0.0.1:${PROBE_PORT}/api/health" || true)"
