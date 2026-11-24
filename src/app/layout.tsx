@@ -13,6 +13,14 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover' as const,
+  themeColor: '#0B1020',
+  colorScheme: 'dark light' as const,
+}
+
 export const metadata: Metadata = {
   title: "AZIMARA MESH — The Governed Operating Fabric for Autonomous AI",
   description: "Enterprise AI Agent Fleet Operating System. Every Agent. One Governed System.",
@@ -20,8 +28,10 @@ export const metadata: Metadata = {
   authors: [{ name: "AI AZIMARA" }],
   icons: {
     icon: "/favicon.svg",
+    apple: "/apple-touch-icon.png",
   },
   openGraph: {
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "AZIMARA MESH — Every agent. One governed system." }],
     title: "AZIMARA MESH",
     description: "Every Agent. One Governed System.",
     siteName: "AZIMARA MESH",

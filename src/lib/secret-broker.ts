@@ -2,6 +2,7 @@
 // clients or written to logs; callers receive short-lived scoped references.
 
 import { randomUUID } from 'node:crypto'
+import { fetchWithTimeout } from '@/lib/http'
 
 export interface Lease {
   ref: string
@@ -71,10 +72,9 @@ export class VaultSecretBroker implements SecretBroker {
     const match = ref.match(/^vault:\/\/[^/]+\/([^#]+)#/)
     if (!match) return null
     const path = decodeURIComponent(match[1])
-    const res = await fetch(`${this.address}/v1/${this.mount}/${path}`, {
+    const res = await fetchWithTimeout(`${this.address}/v1/${this.mount}/${path}`, {
       headers: { 'X-Vault-Token': this.token },
-      signal: AbortSignal.timeout(5000),
-    })
+    }, 5000)
     if (!res.ok) return null
     const body = await res.json() as { data?: Record<string, string> }
     return body.data?.value ?? null

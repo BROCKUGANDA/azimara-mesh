@@ -181,13 +181,16 @@ export function MeshField({
       frame = requestAnimationFrame(loop)
     }
 
-    const observer = new ResizeObserver(resize)
-    observer.observe(canvas)
+    const hasResizeObserver = typeof ResizeObserver !== 'undefined'
+    const observer = hasResizeObserver ? new ResizeObserver(resize) : null
+    if (observer) observer.observe(canvas)
+    else window.addEventListener('resize', resize)
     resize()
     frame = requestAnimationFrame(loop)
 
     return () => {
-      observer.disconnect()
+      if (observer) observer.disconnect()
+      else window.removeEventListener('resize', resize)
       cancelAnimationFrame(frame)
     }
   }, [])

@@ -136,7 +136,11 @@ export function LandingView({ onEnterDemo, onSignIn, demoLoading, demoError }: L
           transition={{ duration: 0.9, delay: 0.15 }}
           className="relative h-[320px] w-full md:h-[520px]"
         >
-          <div className="absolute inset-0 rounded-panel border border-border bg-[#0E1526]/70 elev-3" aria-hidden />
+          <div
+            className="absolute inset-0 rounded-panel border border-border bg-[#0E1526]/70 bg-cover bg-center elev-3"
+            style={{ backgroundImage: 'url(/brand/mesh-hero-pattern.svg)' }}
+            aria-hidden
+          />
           <MeshField className="absolute inset-0 h-full w-full cursor-crosshair" onActivate={() => haptic(10)} />
           <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2">
             <Network className="h-3.5 w-3.5 text-[#42D9E8]" aria-hidden />
@@ -275,7 +279,7 @@ export function LandingView({ onEnterDemo, onSignIn, demoLoading, demoError }: L
 
       <footer className="relative z-10 border-t border-border">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-8 text-micro text-muted-foreground md:flex-row md:items-center md:justify-between md:px-8">
-          <p>© 2026 AI AZIMARA · AZIMARA MESH</p>
+          <p>© 2026 AI AZIMARA · AZIMARA MESH · {process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev'}</p>
           <p>Every agent. One governed system. · Intelligence in Motion.</p>
         </div>
       </footer>

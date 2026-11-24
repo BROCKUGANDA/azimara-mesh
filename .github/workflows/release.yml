@@ -1,0 +1,85 @@
+name: Release
+
+# Automatic promotion: runs only after a successful push CI on main.
+# Version -> immutable release -> staging smoke gate -> atomic production
+# cutover -> GitHub release. Never triggered by pull requests or tag pushes.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: azimara-mesh-release
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Version and promote to production
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: [self-hosted, Linux, X64, azimara-mesh]
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: 'postgresql://mesh_app:build-placeholder@127.0.0.1:5432/mesh?schema=public'
+      DATABASE_MIGRATION_URL: 'postgresql://mesh_migrator:build-placeholder@127.0.0.1:5432/mesh?schema=public'
+      SESSION_SECRET: 'ci-only-session-secret-not-for-production'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout production main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Use preinstalled Bun
+        run: bun --version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bun x prisma generate
+
+      - name: Compute next version
+        id: version
+        run: echo "value=$(bash scripts/next-version.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Build versioned standalone artifact
+        env:
+          NEXT_PUBLIC_APP_VERSION: ${{ steps.version.outputs.value }}
+        run: bun run build
+
+      - name: Promote through staging smoke gate
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+          RELEASES_DIR: /mnt/data/azimara-mesh-releases
+          APP_LINK: /mnt/data/azimara-mesh-app
+          SERVICE_NAME: azimara-mesh
+          PROBE_PORT: '3041'
+        run: bash scripts/vps-deploy.sh
+
+      - name: Tag and publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Azimara Mesh $VERSION"
+          git push origin "$VERSION"
+          gh release create "$VERSION" --generate-notes --title "AZIMARA MESH $VERSION"
+
+      - name: Verify production health
+        run: |
+          for i in $(seq 1 15); do
+            code=$(curl -s -o /tmp/mesh-final-health.json -w '%{http_code}' https://mesh.aiazimara.com/api/health || true)
+            if [ "$code" = "200" ] && grep -q '"status":"ok"' /tmp/mesh-final-health.json; then exit 0; fi
+            sleep 2
+          done
+          echo "production health check failed" >&2
+          exit 1

@@ -7,6 +7,7 @@
 // default; Base mainnet requires explicit opt-in.
 
 import { db } from '@/lib/db'
+import { fetchWithTimeout } from '@/lib/http'
 
 export type OnchainNetwork = 'base-sepolia' | 'base-mainnet'
 
@@ -100,12 +101,11 @@ function amountFromHex(data: string | undefined): number {
 }
 
 async function rpc(url: string, method: string, params: unknown[]): Promise<unknown> {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-    signal: AbortSignal.timeout(8000),
-  })
+  }, 8000)
   if (!res.ok) throw new Error(`RPC ${method} failed: ${res.status}`)
   const json = await res.json() as { result?: unknown; error?: unknown }
   if (json.error) throw new Error(`RPC ${method} error`)

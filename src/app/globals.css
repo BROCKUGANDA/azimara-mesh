@@ -260,6 +260,33 @@
   .text-h1 { font-size: 28px; }
 }
 
+/* Mobile / tablet + cross-browser hardening */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  overflow-x: hidden;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+button, a, [role="button"], input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+@media (pointer: coarse) {
+  button, a, [role="button"] { min-height: 44px; }
+}
+.table-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+@supports not (gap: 1rem) {
+  .grid > * + * { margin-top: 0.75rem; }
+}
+
 /* Trace waterfall + canvas surfaces */
 .grid-surface {
   background-image:

@@ -3,6 +3,7 @@
 // caller must map verified claims to an existing membership or an invite.
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { db } from '@/lib/db'
+import { fetchWithTimeout } from '@/lib/http'
 
 export interface OidcConfig {
   issuer: string
@@ -31,7 +32,7 @@ export async function verifyIdToken(token: string, config?: OidcConfig): Promise
   if (!jwksPromise) {
     jwksPromise = (async () => {
       const discoveryUrl = config?.discoveryUrl ?? `${issuer.replace(/\/$/, '')}/.well-known/openid-configuration`
-      const res = await fetch(discoveryUrl, { signal: AbortSignal.timeout(5000) })
+      const res = await fetchWithTimeout(discoveryUrl, {}, 5000)
       if (!res.ok) throw new Error('OIDC discovery failed')
       const meta = await res.json() as { jwks_uri: string }
       return createRemoteJWKSet(new URL(meta.jwks_uri))

@@ -175,7 +175,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {mobileNavOpen && (
           <div className="fixed inset-0 z-40 lg:hidden">
             <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
-            <div className="absolute left-0 top-0 h-full z-50">{sidebar}</div>
+            <div className="absolute left-0 top-0 h-full z-50 w-60 max-w-[85vw]">{sidebar}</div>
           </div>
         )}
 
@@ -188,7 +188,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Workspace switcher */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-2 rounded-lg border border-border bg-panel px-2.5 py-1.5 hover:bg-elevated motion-fast max-w-[220px]">
+                <button className="flex items-center gap-2 rounded-lg border border-border bg-panel px-2.5 py-1.5 hover:bg-elevated motion-fast max-w-[140px] sm:max-w-[220px]">
                   <span className="h-2 w-2 rounded-full bg-[#42D9E8]" />
                   <span className="text-caption font-medium truncate">{activeWorkspace?.name ?? 'Workspace'}</span>
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -310,16 +310,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {children}
           </main>
 
-          <footer className="mt-auto border-t border-border px-6 py-3 flex items-center justify-between text-micro text-muted-foreground">
+          <footer className="mt-auto border-t border-border px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-2 text-micro text-muted-foreground safe-bottom">
             <span className="flex items-center gap-1.5"><span className="inline-block h-1.5 w-1.5 rounded-full bg-[#35C991]" />Governed runtime active · in-process demo deployment</span>
-            <span>AZIMARA MESH · Every Agent. One Governed System.</span>
+            <span>AZIMARA MESH · {process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev'} · Every Agent. One Governed System.</span>
           </footer>
         </div>
       </div>
 
       {/* Command palette */}
       <Dialog open={paletteOpen} onOpenChange={setPaletteOpen}>
-        <DialogContent className="radius-modal p-0 max-w-xl top-[20%] translate-y-0">
+        <DialogContent className="radius-modal p-0 max-w-[calc(100vw-2rem)] sm:max-w-xl top-[20%] translate-y-0">
           <DialogTitle className="sr-only">Command palette</DialogTitle>
           <div className="border-b border-border px-3 py-2.5 flex items-center gap-2">
             <Command className="h-4 w-4 text-[#8B7CFF]" />

@@ -44,7 +44,38 @@ if [ -n "${MESH_ENV:-}" ]; then
   printf '%s\n' "$MESH_ENV" >> "$RELEASE/.env"
 fi
 chmod 600 "$RELEASE/.env"
+# Record the immutable version on the release itself.
+if [ -n "${RELEASE_VERSION:-}" ]; then
+  printf '%s\n' "$RELEASE_VERSION" > "$RELEASE/VERSION"
+fi
 echo "release staged: $RELEASE"
+
+# --- staging smoke gate -----------------------------------------------------
+# Boot the staged build on a separate port and exercise its health endpoint
+# before any production traffic is switched. This is the "staging" gate for
+# the single-host deployment.
+if [ "${SKIP_PROBE:-0}" != "1" ]; then
+  PROBE_PORT="${PROBE_PORT:-3041}"
+  if ss -ltn | grep -q ":${PROBE_PORT} "; then
+    echo "probe port $PROBE_PORT is busy; refusing to deploy" >&2
+    exit 1
+  fi
+  PROBE_PID_FILE="/tmp/mesh-probe-${STAMP}.pid"
+  (cd "$RELEASE" && PORT="$PROBE_PORT" nohup bun server.js > "/tmp/mesh-probe-${STAMP}.log" 2>&1 & echo $! > "$PROBE_PID_FILE")
+  PROBE_OK=0
+  for _ in $(seq 1 25); do
+    code="$(curl -s -o "/tmp/mesh-probe-${STAMP}.json" -w '%{http_code}' "http://127.0.0.1:${PROBE_PORT}/api/health" || true)"
+    if [ "$code" = "200" ] && grep -q '"status":"ok"' "/tmp/mesh-probe-${STAMP}.json"; then PROBE_OK=1; break; fi
+    sleep 1
+  done
+  kill "$(cat "$PROBE_PID_FILE")" >/dev/null 2>&1 || true
+  rm -f "$PROBE_PID_FILE"
+  if [ "$PROBE_OK" != "1" ]; then
+    echo "staging smoke gate failed; refusing to promote. Log: /tmp/mesh-probe-${STAMP}.log" >&2
+    exit 1
+  fi
+  echo "staging smoke gate passed"
+fi
 
 # --- forward-only migrations (before traffic switch) -----------------------
 MIGRATION_URL="$(grep -E '^DATABASE_MIGRATION_URL=' "$RELEASE/.env" | head -1 | cut -d= -f2- || true)"
