@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const context = await buildSessionContext(user.id, membership.workspaceId)
-    const token = await createSessionToken(user.id)
+    const token = await createSessionToken(user.id, sessionMetaFromRequest(req))
     const res = NextResponse.json({ authenticated: true, ...context })
     res.cookies.set(SESSION_COOKIE, token, await sessionCookieOptions(req))
     await audit({

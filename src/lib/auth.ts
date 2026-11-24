@@ -67,7 +67,7 @@ export function hashApiKey(raw: string): string {
 }
 
 interface SessionPayload { userId: string; sid: string; exp: number }
-export interface SessionIdentity extends SessionPayload {}
+export type SessionIdentity = SessionPayload
 
 export interface SessionMeta { userAgent?: string | null; ip?: string | null }
 

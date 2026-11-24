@@ -16,6 +16,16 @@ export interface SessionData {
   isDemo?: boolean
 }
 
+export type UserSessionRow = {
+  id: string
+  createdAt: string
+  lastActiveAt: string
+  expiresAt: string
+  userAgent: string
+  ip: string
+  current: boolean
+}
+
 /** Post-sign-in landing board — demo tenants get a role-tailored board, real users land on the production overview. */
 export function landingViewFor(s: SessionData | null | undefined): ViewId {
   if (!s?.authenticated) return 'overview'
@@ -55,7 +65,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   workspaceId: null,
   paletteOpen: false,
   refreshKey: 0,
-  setSession: (s) => set({ session: s, workspaceId: s?.activeWorkspaceId ?? get().workspaceId }),
+  setSession: (s) => set({ session: s, workspaceId: s?.activeWorkspaceId ?? null }),
   setSessionLoaded: (v) => set({ sessionLoaded: v }),
   navigate: (view, params = {}) => set({ view, params, refreshKey: get().refreshKey + 1 }),
   setEnvironment: (environment) => set({ environment }),
@@ -95,6 +105,23 @@ export async function api<T>(path: string, init?: ApiInit): Promise<T> {
     throw new ApiError(data?.error?.code ?? 'ERROR', data?.error?.message ?? `Request failed (${res.status})`, res.status)
   }
   return data
+}
+
+/**
+ * Sign out reliably: revoke the server-side session and clear the cookie, then
+ * drop local auth state. Does not depend on a full page reload, so a slow or
+ * failed redirect can never leave the UI looking authenticated.
+ */
+export async function signOut(): Promise<void> {
+  try {
+    await api('/api/auth', { method: 'DELETE' })
+  } finally {
+    const store = useAppStore.getState()
+    store.setSession(null)
+    store.setSessionLoaded(true)
+    store.setPaletteOpen(false)
+    store.navigate('overview')
+  }
 }
 
 /** Simple data-fetching hook with optional polling. */

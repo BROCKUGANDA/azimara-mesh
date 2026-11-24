@@ -5,7 +5,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { useAppStore, api, timeAgo } from '@/lib/client'
+import { useAppStore, api, signOut, timeAgo } from '@/lib/client'
+import { toast } from 'sonner'
 import type { ViewId } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +68,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [pendingApprovals, setPendingApprovals] = useState(0)
   const [notifications, setNotifications] = useState<{ id: string; title: string; body: string; severity: string; kind: string; linkView: string; createdAt: string; readAt: string | null }[]>([])
   const [search, setSearch] = useState('')
+  const [signingOut, setSigningOut] = useState(false)
+
+  const handleSignOut = async () => {
+    if (signingOut) return
+    setSigningOut(true)
+    try {
+      await signOut()
+    } catch (err) {
+      // Local state is already cleared by signOut(); surface the network error.
+      toast.error(err instanceof Error ? err.message : 'Sign out failed')
+    } finally {
+      setSigningOut(false)
+    }
+  }
 
   useEffect(() => {
     if (!workspaceId) return
@@ -298,8 +313,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <DropdownMenuItem onClick={() => navigate('settings')}><Settings className="h-3.5 w-3.5 mr-2" />Settings</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('identity')}><KeyRound className="h-3.5 w-3.5 mr-2" />Identity & Access</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={async () => { await api('/api/auth', { method: 'DELETE' }); window.location.reload() }} className="text-[#F06B7A]">
-                    <LogOut className="h-3.5 w-3.5 mr-2" />Sign out
+                  <DropdownMenuItem onClick={handleSignOut} disabled={signingOut} className="text-[#F06B7A]">
+                    <LogOut className="h-3.5 w-3.5 mr-2" />{signingOut ? 'Signing out…' : 'Sign out'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
