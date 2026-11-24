@@ -119,6 +119,23 @@ approval gates proven · audit evidence complete · runbook for deploy/verify.
 
 The backup and the old unit are retained; no destructive cleanup was done.
 
+## Public entry experience (2026-11-24)
+
+- `/` now shows a public landing view before authentication. It presents the
+  Mesh Midnight theme, a real 3D-projected canvas topology with travelling
+  flow pulses, staged motion, capability and governance sections, and subtle
+  haptics on supported devices. `prefers-reduced-motion` is respected.
+- Why it previously opened sign-in: `src/app/page.tsx` rendered `LoginView`
+  whenever `/api/auth` reported unauthenticated. The landing state was added
+  ahead of that branch; sign-in remains available from the header/CTA.
+- One-click demo: `POST /api/auth/demo` resolves the demo identity and its RBAC
+  role entirely server-side from `MESH_DEMO_EMAIL` + persisted membership; the
+  client sends no role. Gated by `MESH_DEMO_LOGIN=1` outside development and
+  audited as `auth.demo_login`. It lands on the role-appropriate board.
+- Fix found during verification: entrypoint audit writes had no ambient tenant
+  context and were silently denied by RLS. `audit()` now establishes context
+  from the event's own workspace/org; covered by a regression test.
+
 ## Outstanding production gates
 
 Tenant-isolation integration suite, worker-crash recovery demonstration,
