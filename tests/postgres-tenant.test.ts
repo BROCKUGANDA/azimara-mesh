@@ -2,6 +2,7 @@ import { describe, expect, test, beforeAll, afterAll } from 'bun:test'
 import { createHash, randomBytes } from 'node:crypto'
 import { db, migrationDb } from '@/lib/db'
 import { runWithDatabaseContext } from '@/lib/db-context'
+import { audit } from '@/lib/audit'
 
 /**
  * Integration test for database-enforced tenant isolation. Run only against a
@@ -14,6 +15,7 @@ const wsB = `ws_b_${suffix}`
 const orgId = `org_${suffix}`
 
 async function cleanup() {
+  await migrationDb.$executeRawUnsafe(`DELETE FROM "AuditEvent" WHERE "workspaceId" IN ('${wsA}', '${wsB}')`)
   await migrationDb.$executeRawUnsafe(`DELETE FROM "Agent" WHERE "workspaceId" IN ('${wsA}', '${wsB}')`)
   await migrationDb.$executeRawUnsafe(`DELETE FROM "Workspace" WHERE "id" IN ('${wsA}', '${wsB}')`)
   await migrationDb.$executeRawUnsafe(`DELETE FROM "Organization" WHERE "id" = '${orgId}'`)
@@ -84,6 +86,20 @@ describe('PostgreSQL row-level security', () => {
       }),
     )
     await expect(Promise.resolve(write)).rejects.toThrow()
+  })
+
+  test('audit writes carry their own tenant context at entrypoints', async () => {
+    if (!/^postgres/i.test(process.env.DATABASE_URL ?? '')) return
+    const marker = `audit_ctx_${suffix}`
+    // Deliberately no runWithDatabaseContext wrapper: login/webhook/worker paths
+    // call audit() with no ambient context.
+    await audit({
+      organizationId: orgId, workspaceId: wsA,
+      actorId: 'u1', actorName: 'context-test', action: marker,
+    })
+    const row = await migrationDb.auditEvent.findFirst({ where: { action: marker } })
+    expect(row).not.toBeNull()
+    expect(row?.workspaceId).toBe(wsA)
   })
 
   test('hashes differ for distinct keys', () => {

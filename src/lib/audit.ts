@@ -1,6 +1,7 @@
 // Immutable audit trail writer. Every consequential operation flows through here.
 
 import { db } from '@/lib/db'
+import { runWithDatabaseContext } from '@/lib/db-context'
 
 export type AuditSeverity = 'info' | 'notice' | 'warning' | 'critical'
 
@@ -20,21 +21,27 @@ export interface AuditInput {
 
 export async function audit(input: AuditInput): Promise<void> {
   try {
-    await db.auditEvent.create({
-      data: {
-        organizationId: input.organizationId,
-        workspaceId: input.workspaceId ?? null,
-        actorType: input.actorType ?? 'user',
-        actorId: input.actorId ?? '',
-        actorName: input.actorName ?? '',
-        action: input.action,
-        resourceType: input.resourceType ?? '',
-        resourceId: input.resourceId ?? '',
-        severity: input.severity ?? 'info',
-        detailJson: JSON.stringify(input.detail ?? {}),
-        ip: input.ip ?? '10.0.0.0',
-      },
-    })
+    // Entrypoints (login, webhooks, workers) may call audit() with no ambient
+    // tenant context. RLS would otherwise silently deny the insert. The event
+    // carries its own scope, so use it to establish the context for this write.
+    await runWithDatabaseContext(
+      { workspaceId: input.workspaceId ?? undefined, organizationId: input.organizationId },
+      () => db.auditEvent.create({
+        data: {
+          organizationId: input.organizationId,
+          workspaceId: input.workspaceId ?? null,
+          actorType: input.actorType ?? 'user',
+          actorId: input.actorId ?? '',
+          actorName: input.actorName ?? '',
+          action: input.action,
+          resourceType: input.resourceType ?? '',
+          resourceId: input.resourceId ?? '',
+          severity: input.severity ?? 'info',
+          detailJson: JSON.stringify(input.detail ?? {}),
+          ip: input.ip ?? '10.0.0.0',
+        },
+      }),
+    )
   } catch (err) {
     // Audit failures must never break the operation silently — surface to logs.
     console.error('[audit] failed to persist audit event', input.action, err)
