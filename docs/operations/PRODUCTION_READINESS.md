@@ -136,6 +136,25 @@ The backup and the old unit are retained; no destructive cleanup was done.
   context and were silently denied by RLS. `audit()` now establishes context
   from the event's own workspace/org; covered by a regression test.
 
+## Demo dataset (2026-11-24)
+
+`prisma/seed-demo-data.ts` seeds an idempotent, clearly-labelled dataset into an
+existing workspace (`DEMO_WORKSPACE_ID`). It never wipes tables: every row uses
+a deterministic `demo_` id or slug and is upserted, so reruns refresh rather
+than duplicate. Current seeded counts: 6 agents, 18 executions, 90 execution
+steps, 36 usage events, 4 evaluation results, plus fleets, tools, models,
+policies, workflows, approvals, deployments, incidents, alerts, audit events,
+service identities, memory records and a labelled demo credit balance.
+
+The Overview view explicitly states that historical telemetry is seeded demo
+data and invites the operator to trigger a live execution for real telemetry.
+Run with:
+
+```bash
+DEMO_WORKSPACE_ID=<workspace-id> DATABASE_MIGRATION_URL=postgres://... \
+  bun prisma/seed-demo-data.ts
+```
+
 ## Outstanding production gates
 
 Tenant-isolation integration suite, worker-crash recovery demonstration,
